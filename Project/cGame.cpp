@@ -1,8 +1,13 @@
 #include "cGame.h"
+void draw_start_menu();
+void draw_multiplayer_menu();
+void draw_connect_screen();
 
 cGame::cGame(void) {}
 cGame::~cGame(void){}
 
+char ipAddress[100];
+int ipSize = 0;
 bool cGame::Init(int lvl)
 {
 	bool res = true;
@@ -11,7 +16,8 @@ bool cGame::Init(int lvl)
 	time = ang = 0.0f;
 	noclipSpeedF = 1.0f; 
 	level = lvl;
-	state = STATE_RUN;
+	//state = STATE_RUN;
+	state = STATE_MENU;
 	respawn_id = 0;
 	pickedkey_id = -1;
 
@@ -125,12 +131,7 @@ bool cGame::Loop()
 	int t1,t2;
 	t1 = glutGet(GLUT_ELAPSED_TIME);
 
-	if(state == STATE_RUN)
-	{
-		res = Process();
-		if(res) Render();
-	}
-	else if(state == STATE_LIVELOSS)
+    if(state == STATE_LIVELOSS)
 	{
 		Render();
 		Player.SetPos(respawn_points[respawn_id].GetX(),respawn_points[respawn_id].GetY()+RADIUS,respawn_points[respawn_id].GetZ());
@@ -139,6 +140,10 @@ bool cGame::Loop()
 	else if(state == STATE_ENDGAME)
 	{
 		res=false;
+	}
+	else {
+		res = Process();
+		if (res) Render();
 	}
 
 	do { t2 = glutGet(GLUT_ELAPSED_TIME);
@@ -153,6 +158,15 @@ void cGame::Finalize()
 //Input
 void cGame::ReadKeyboard(unsigned char key, int x, int y, bool press)
 {
+	if (state == STATE_MULTIPLAYER) {
+		if (key == 13)
+			state = STATE_CONNECT;
+		if ((isdigit(key) || key == '.') && !press) {
+			ipAddress[ipSize] = key;
+			ipSize++;
+		}
+		return;
+	}
 	if(key >= 'A' && key <= 'Z') key += 32;
 	keys[key] = press;
 }
@@ -223,214 +237,229 @@ bool cGame::Process()
 	//Process Input
 	if(keys[27])	res=false;
 
-	float vx,vy,vz;
-	Camera.GetDirectionVector(vx,vy,vz);
-	float factor = sqrt( 1.0f/(vx*vx + vz*vz) );
-
-	if(keys['1']) Camera.SetState(STATE_FPS);
-	Player.SetFade(!keys['2']);
-	if(keys['3']) Camera.SetState(STATE_TPS);
-
-	if(noclip)
-	{
-		if(keys[P_UP])
-		{
-			Player.SetX(Player.GetX() + noclipSpeedF*vx);
-			Player.SetY(Player.GetY() + noclipSpeedF*vy);
-			Player.SetZ(Player.GetZ() + noclipSpeedF*vz);
-			if(Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw());
+	if (state == STATE_MENU) {
+		if (keys['s']) {
+			state = STATE_RUN;
+			Render();
+			//	return;
 		}
-		else if(keys[P_DOWN])
-		{
-			Player.SetX(Player.GetX() - noclipSpeedF*vx);
-			Player.SetY(Player.GetY() - noclipSpeedF*vy);
-			Player.SetZ(Player.GetZ() - noclipSpeedF*vz);
-			if(Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw()-PI);
-		}
-		if(keys[P_LEFT])
-		{
-			Player.SetX(Player.GetX() + noclipSpeedF*vz*factor);
-			Player.SetZ(Player.GetZ() - noclipSpeedF*vx*factor);
-			if(Camera.GetState() == STATE_TPS_FREE)
-			{
-				if(keys['w']) Camera.SetLastYaw(Camera.GetYaw()-PI/4);
-				else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw()-(PI*3)/4);
-				else Camera.SetLastYaw(Camera.GetYaw()-PI/2);
-			}
-		}
-		else if(keys[P_RIGHT])
-		{
-			Player.SetX(Player.GetX() - noclipSpeedF*vz*factor);
-			Player.SetZ(Player.GetZ() + noclipSpeedF*vx*factor);
-			if(Camera.GetState() == STATE_TPS_FREE)
-			{
-				if(keys['w']) Camera.SetLastYaw(Camera.GetYaw()+PI/4);
-				else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw()+(PI*3)/4);
-				else Camera.SetLastYaw(Camera.GetYaw()+PI/2);
-			}
-		}
-		if(mouse_left_down) Player.SetY(Player.GetY() + noclipSpeedF);
-		else if(mouse_right_down) Player.SetY(Player.GetY() - noclipSpeedF);
-		if(keys[P_PLUS])
-		{
-			noclipSpeedF += 0.01f;
-			if(noclipSpeedF > 2.0f) noclipSpeedF = 2.0f;
-		}
-		else if(keys[P_MINUS])
-		{
-			noclipSpeedF -= 0.01f;
-			if(noclipSpeedF < 0.05f) noclipSpeedF = 0.05f;
+		else if (keys['m']) {
+			state = STATE_MULTIPLAYER;
+			Render();
 		}
 	}
-	else
-	{
-		if(keys[P_UP])
-		{
-			float nextVX = Player.GetVX() + PLAYER_SPEED*vx*factor;
-			float nextVZ = Player.GetVZ() + PLAYER_SPEED*vz*factor;
-			float limitation_factor;
-			if( sqrt(nextVX*nextVX + nextVZ*nextVZ) <= MAX_MOVEMENT ) limitation_factor = 1.0f;
-			else limitation_factor = sqrt( (MAX_MOVEMENT*MAX_MOVEMENT)/(nextVX*nextVX + nextVZ*nextVZ) );
-			Player.SetVX(nextVX*limitation_factor);
-			Player.SetVZ(nextVZ*limitation_factor);
+	else {
 
-			if(Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw());
-		}
-		else if(keys[P_DOWN])
-		{
-			float nextVX = Player.GetVX() - PLAYER_SPEED*vx*factor;
-			float nextVZ = Player.GetVZ() - PLAYER_SPEED*vz*factor;
-			float limitation_factor;
-			if( sqrt(nextVX*nextVX + nextVZ*nextVZ) <= MAX_MOVEMENT ) limitation_factor = 1.0f;
-			else limitation_factor = sqrt( (MAX_MOVEMENT*MAX_MOVEMENT)/(nextVX*nextVX + nextVZ*nextVZ) );
-			Player.SetVX(nextVX*limitation_factor);
-			Player.SetVZ(nextVZ*limitation_factor);
 
-			if(Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw()-PI);
-		}
-		if(keys[P_LEFT])
-		{
-			float nextVX = Player.GetVX() + PLAYER_SPEED*vz*factor;
-			float nextVZ = Player.GetVZ() - PLAYER_SPEED*vx*factor;
-			float limitation_factor;
-			if( sqrt(nextVX*nextVX + nextVZ*nextVZ) <= MAX_MOVEMENT ) limitation_factor = 1.0f;
-			else limitation_factor = sqrt( (MAX_MOVEMENT*MAX_MOVEMENT)/(nextVX*nextVX + nextVZ*nextVZ) );
-			Player.SetVX(nextVX*limitation_factor);
-			Player.SetVZ(nextVZ*limitation_factor);
+		float vx, vy, vz;
+		Camera.GetDirectionVector(vx, vy, vz);
+		float factor = sqrt(1.0f / (vx*vx + vz * vz));
 
-			if(Camera.GetState() == STATE_TPS_FREE)
+		if (keys['1']) Camera.SetState(STATE_FPS);
+		Player.SetFade(!keys['2']);
+		if (keys['3']) Camera.SetState(STATE_TPS);
+
+
+		if (noclip)
+		{
+			if (keys[P_UP])
 			{
-				if(keys['w']) Camera.SetLastYaw(Camera.GetYaw()-PI/4);
-				else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw()-(PI*3)/4);
-				else Camera.SetLastYaw(Camera.GetYaw()-PI/2);
+				Player.SetX(Player.GetX() + noclipSpeedF * vx);
+				Player.SetY(Player.GetY() + noclipSpeedF * vy);
+				Player.SetZ(Player.GetZ() + noclipSpeedF * vz);
+				if (Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw());
 			}
-		}
-		else if(keys[P_RIGHT])
-		{
-			float nextVX = Player.GetVX() - PLAYER_SPEED*vz*factor;
-			float nextVZ = Player.GetVZ() + PLAYER_SPEED*vx*factor;
-			float limitation_factor;
-			if( sqrt(nextVX*nextVX + nextVZ*nextVZ) <= MAX_MOVEMENT ) limitation_factor = 1.0f;
-			else limitation_factor = sqrt( (MAX_MOVEMENT*MAX_MOVEMENT)/(nextVX*nextVX + nextVZ*nextVZ) );
-			Player.SetVX(nextVX*limitation_factor);
-			Player.SetVZ(nextVZ*limitation_factor);
-			
-			if(Camera.GetState() == STATE_TPS_FREE)
+			else if (keys[P_DOWN])
 			{
-				if(keys['w']) Camera.SetLastYaw(Camera.GetYaw()+PI/4);
-				else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw()+(PI*3)/4);
-				else Camera.SetLastYaw(Camera.GetYaw()+PI/2);
+				Player.SetX(Player.GetX() - noclipSpeedF * vx);
+				Player.SetY(Player.GetY() - noclipSpeedF * vy);
+				Player.SetZ(Player.GetZ() - noclipSpeedF * vz);
+				if (Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw() - PI);
 			}
-		}
-		if(keys[P_JUMP])
-		{
-			if(Player.GetY()-RADIUS < Terrain.GetHeight(Player.GetX(),Player.GetZ())+0.01f)
+			if (keys[P_LEFT])
 			{
-				Player.SetVY(PLAYER_JUMP_SPEED);
-				Sound.PlayBounce(1.0f);
-			}
-		}
-
-		float initial_z = Player.GetZ();
-		Physics(Player);
-
-		//comprueba si el player muere
-		if(Player.GetY() <= Lava.GetHeight()+RADIUS)
-		{
-			Player.SetY(Lava.GetHeight()+RADIUS);
-			Player.SetVel(0.0f,0.0f,0.0f);
-			pickedkey_id = -1;
-			state = STATE_LIVELOSS;
-			Sound.Play(SOUND_SWISH);
-		}
-
-		Coord P; P.x = Player.GetX(); P.y = Player.GetY(); P.z = Player.GetZ();
-		float r = RADIUS;
-
-		//comprueba si el player entra en algun Respawn Point
-		float cr = CIRCLE_RADIUS,ah = AURA_HEIGHT;
-		for(unsigned int i=0; i<respawn_points.size(); i++)
-		{
-			Coord RP; RP.x = respawn_points[i].GetX(); RP.y = respawn_points[i].GetY(); RP.z = respawn_points[i].GetZ(); 
-			if( sqrt((P.x-RP.x)*(P.x-RP.x) + (P.y-RP.y)*(P.y-RP.y) + (P.z-RP.z)*(P.z-RP.z)) <= RADIUS+CIRCLE_RADIUS)
-			{
-				if(respawn_id != i) Sound.Play(SOUND_SWISH);
-				respawn_id = i;
-			}
-		}
-
-		//comprueba si el player recoge alguna llave
-		if(pickedkey_id == -1)
-		{
-			for(unsigned int i=0; i<target_keys.size(); i++)
-			{
-				if(!target_keys[i].IsDeployed())
+				Player.SetX(Player.GetX() + noclipSpeedF * vz*factor);
+				Player.SetZ(Player.GetZ() - noclipSpeedF * vx*factor);
+				if (Camera.GetState() == STATE_TPS_FREE)
 				{
-					Coord K; K.x = target_keys[i].GetX(); K.y = target_keys[i].GetY(); K.z = target_keys[i].GetZ(); 
-					if( sqrt((P.x-K.x)*(P.x-K.x) + (P.y-K.y)*(P.y-K.y) + (P.z-K.z)*(P.z-K.z)) <= RADIUS*2)
+					if (keys['w']) Camera.SetLastYaw(Camera.GetYaw() - PI / 4);
+					else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw() - (PI * 3) / 4);
+					else Camera.SetLastYaw(Camera.GetYaw() - PI / 2);
+				}
+			}
+			else if (keys[P_RIGHT])
+			{
+				Player.SetX(Player.GetX() - noclipSpeedF * vz*factor);
+				Player.SetZ(Player.GetZ() + noclipSpeedF * vx*factor);
+				if (Camera.GetState() == STATE_TPS_FREE)
+				{
+					if (keys['w']) Camera.SetLastYaw(Camera.GetYaw() + PI / 4);
+					else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw() + (PI * 3) / 4);
+					else Camera.SetLastYaw(Camera.GetYaw() + PI / 2);
+				}
+			}
+			if (mouse_left_down) Player.SetY(Player.GetY() + noclipSpeedF);
+			else if (mouse_right_down) Player.SetY(Player.GetY() - noclipSpeedF);
+			if (keys[P_PLUS])
+			{
+				noclipSpeedF += 0.01f;
+				if (noclipSpeedF > 2.0f) noclipSpeedF = 2.0f;
+			}
+			else if (keys[P_MINUS])
+			{
+				noclipSpeedF -= 0.01f;
+				if (noclipSpeedF < 0.05f) noclipSpeedF = 0.05f;
+			}
+		}
+		else
+		{
+			if (keys[P_UP])
+			{
+				float nextVX = Player.GetVX() + PLAYER_SPEED * vx*factor;
+				float nextVZ = Player.GetVZ() + PLAYER_SPEED * vz*factor;
+				float limitation_factor;
+				if (sqrt(nextVX*nextVX + nextVZ * nextVZ) <= MAX_MOVEMENT) limitation_factor = 1.0f;
+				else limitation_factor = sqrt((MAX_MOVEMENT*MAX_MOVEMENT) / (nextVX*nextVX + nextVZ * nextVZ));
+				Player.SetVX(nextVX*limitation_factor);
+				Player.SetVZ(nextVZ*limitation_factor);
+
+				if (Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw());
+			}
+			else if (keys[P_DOWN])
+			{
+				float nextVX = Player.GetVX() - PLAYER_SPEED * vx*factor;
+				float nextVZ = Player.GetVZ() - PLAYER_SPEED * vz*factor;
+				float limitation_factor;
+				if (sqrt(nextVX*nextVX + nextVZ * nextVZ) <= MAX_MOVEMENT) limitation_factor = 1.0f;
+				else limitation_factor = sqrt((MAX_MOVEMENT*MAX_MOVEMENT) / (nextVX*nextVX + nextVZ * nextVZ));
+				Player.SetVX(nextVX*limitation_factor);
+				Player.SetVZ(nextVZ*limitation_factor);
+
+				if (Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw() - PI);
+			}
+			if (keys[P_LEFT])
+			{
+				float nextVX = Player.GetVX() + PLAYER_SPEED * vz*factor;
+				float nextVZ = Player.GetVZ() - PLAYER_SPEED * vx*factor;
+				float limitation_factor;
+				if (sqrt(nextVX*nextVX + nextVZ * nextVZ) <= MAX_MOVEMENT) limitation_factor = 1.0f;
+				else limitation_factor = sqrt((MAX_MOVEMENT*MAX_MOVEMENT) / (nextVX*nextVX + nextVZ * nextVZ));
+				Player.SetVX(nextVX*limitation_factor);
+				Player.SetVZ(nextVZ*limitation_factor);
+
+				if (Camera.GetState() == STATE_TPS_FREE)
+				{
+					if (keys['w']) Camera.SetLastYaw(Camera.GetYaw() - PI / 4);
+					else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw() - (PI * 3) / 4);
+					else Camera.SetLastYaw(Camera.GetYaw() - PI / 2);
+				}
+			}
+			else if (keys[P_RIGHT])
+			{
+				float nextVX = Player.GetVX() - PLAYER_SPEED * vz*factor;
+				float nextVZ = Player.GetVZ() + PLAYER_SPEED * vx*factor;
+				float limitation_factor;
+				if (sqrt(nextVX*nextVX + nextVZ * nextVZ) <= MAX_MOVEMENT) limitation_factor = 1.0f;
+				else limitation_factor = sqrt((MAX_MOVEMENT*MAX_MOVEMENT) / (nextVX*nextVX + nextVZ * nextVZ));
+				Player.SetVX(nextVX*limitation_factor);
+				Player.SetVZ(nextVZ*limitation_factor);
+
+				if (Camera.GetState() == STATE_TPS_FREE)
+				{
+					if (keys['w']) Camera.SetLastYaw(Camera.GetYaw() + PI / 4);
+					else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw() + (PI * 3) / 4);
+					else Camera.SetLastYaw(Camera.GetYaw() + PI / 2);
+				}
+			}
+			if (keys[P_JUMP])
+			{
+				if (Player.GetY() - RADIUS < Terrain.GetHeight(Player.GetX(), Player.GetZ()) + 0.01f)
+				{
+					Player.SetVY(PLAYER_JUMP_SPEED);
+					Sound.PlayBounce(1.0f);
+				}
+			}
+
+			float initial_z = Player.GetZ();
+			Physics(Player);
+
+			//comprueba si el player muere
+			if (Player.GetY() <= Lava.GetHeight() + RADIUS)
+			{
+				Player.SetY(Lava.GetHeight() + RADIUS);
+				Player.SetVel(0.0f, 0.0f, 0.0f);
+				pickedkey_id = -1;
+				state = STATE_LIVELOSS;
+				Sound.Play(SOUND_SWISH);
+			}
+
+			Coord P; P.x = Player.GetX(); P.y = Player.GetY(); P.z = Player.GetZ();
+			float r = RADIUS;
+
+			//comprueba si el player entra en algun Respawn Point
+			float cr = CIRCLE_RADIUS, ah = AURA_HEIGHT;
+			for (unsigned int i = 0; i < respawn_points.size(); i++)
+			{
+				Coord RP; RP.x = respawn_points[i].GetX(); RP.y = respawn_points[i].GetY(); RP.z = respawn_points[i].GetZ();
+				if (sqrt((P.x - RP.x)*(P.x - RP.x) + (P.y - RP.y)*(P.y - RP.y) + (P.z - RP.z)*(P.z - RP.z)) <= RADIUS + CIRCLE_RADIUS)
+				{
+					if (respawn_id != i) Sound.Play(SOUND_SWISH);
+					respawn_id = i;
+				}
+			}
+
+			//comprueba si el player recoge alguna llave
+			if (pickedkey_id == -1)
+			{
+				for (unsigned int i = 0; i < target_keys.size(); i++)
+				{
+					if (!target_keys[i].IsDeployed())
 					{
-						pickedkey_id = i;
-						Sound.Play(SOUND_PICKUP);
+						Coord K; K.x = target_keys[i].GetX(); K.y = target_keys[i].GetY(); K.z = target_keys[i].GetZ();
+						if (sqrt((P.x - K.x)*(P.x - K.x) + (P.y - K.y)*(P.y - K.y) + (P.z - K.z)*(P.z - K.z)) <= RADIUS * 2)
+						{
+							pickedkey_id = i;
+							Sound.Play(SOUND_PICKUP);
+						}
 					}
 				}
 			}
-		}
 
-		//comprueba si el player llega con una llave a su respectiva columna
-		if(pickedkey_id != -1)
-		{
-			if( columns[pickedkey_id].InsideGatheringArea(P.x,P.y,P.z) )
+			//comprueba si el player llega con una llave a su respectiva columna
+			if (pickedkey_id != -1)
 			{
-				Sound.Play(SOUND_UNLOCK);
-				Sound.Play(SOUND_ENERGYFLOW);
-				target_keys[pickedkey_id].Deploy();
-				pickedkey_id = -1;
-				if(respawn_id)
+				if (columns[pickedkey_id].InsideGatheringArea(P.x, P.y, P.z))
 				{
-					Sound.Play(SOUND_SWISH);
-					respawn_id = 0;
+					Sound.Play(SOUND_UNLOCK);
+					Sound.Play(SOUND_ENERGYFLOW);
+					target_keys[pickedkey_id].Deploy();
+					pickedkey_id = -1;
+					if (respawn_id)
+					{
+						Sound.Play(SOUND_SWISH);
+						respawn_id = 0;
+					}
+					bool all_keys_deployed = true;
+					for (unsigned int i = 0; all_keys_deployed && i < target_keys.size(); i++) all_keys_deployed = target_keys[i].IsDeployed();
+					portal_activated = all_keys_deployed;
+					if (portal_activated) Sound.Play(SOUND_WARP);
 				}
-				bool all_keys_deployed = true;
-				for(unsigned int i=0; all_keys_deployed && i<target_keys.size(); i++) all_keys_deployed = target_keys[i].IsDeployed();
-				portal_activated = all_keys_deployed;
-				if(portal_activated) Sound.Play(SOUND_WARP);
 			}
-		}
 
-		//comprueba si el player atraviesa el portal estando activado
-		if(portal_activated)
-		{
-			if( Portal.InsidePortal(P.x,P.y,P.z,RADIUS) )
+			//comprueba si el player atraviesa el portal estando activado
+			if (portal_activated)
 			{
-				if( (initial_z-Portal.GetZ() <= 0.0f && Player.GetZ()-Portal.GetZ() >= 0.0f) || 
-				    (initial_z-Portal.GetZ() >= 0.0f && Player.GetZ()-Portal.GetZ() <= 0.0f)  ) state = STATE_ENDGAME;
+				if (Portal.InsidePortal(P.x, P.y, P.z, RADIUS))
+				{
+					if ((initial_z - Portal.GetZ() <= 0.0f && Player.GetZ() - Portal.GetZ() >= 0.0f) ||
+						(initial_z - Portal.GetZ() >= 0.0f && Player.GetZ() - Portal.GetZ() <= 0.0f)) state = STATE_ENDGAME;
+				}
 			}
 		}
+
+		//limpio buffer de sonidos
+		Sound.Update();
 	}
-
-	//limpio buffer de sonidos
-	Sound.Update();
-
 	return res;
 }
 
@@ -579,7 +608,7 @@ void cGame::Render()
 
 	//draw scene(terrain + lava + skybox)
 	Scene.Draw(&Data,&Terrain,&Lava,&Shader,playerPos);
-
+	
 	//draw keys
 	for(unsigned int i=0; i<target_keys.size(); i++)
 	{
@@ -654,5 +683,258 @@ void cGame::Render()
 		else respawn_points[i].Draw(Data.GetID(IMG_CIRCLE_OFF),false,&Shader);
 	}
 
+	switch (state) {
+	case STATE_MENU: draw_start_menu();
+		break;
+	case STATE_MULTIPLAYER: draw_multiplayer_menu();
+		break;
+	case STATE_CONNECT: draw_connect_screen();
+		break;
+	default: break;
+	}
+
 	glutSwapBuffers();
+}
+
+void draw_string(std::string str)
+{
+	for (unsigned int i = 0; i<str.length(); i++)
+	{
+		glutStrokeCharacter(GLUT_STROKE_ROMAN, *(str.begin() + i));
+	}
+}
+
+void draw_start_menu()
+{
+	glDisable(GL_LIGHTING);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluOrtho2D(-50, 50, -50, 50);
+
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glDisable(GL_CULL_FACE);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glColor3f(0.4, 0, 0.8);
+	glBegin(GL_QUADS);
+	glVertex2f(20.0f, 20.0f);
+	glVertex2f(20.0f, -20.0f);
+	glVertex2f(-20.0f, -20.0f);
+	glVertex2f(-20.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(20.0f, 20.0f);
+	glVertex2f(20.0f, -20.0f);
+	glVertex2f(-20.0f, -20.0f);
+	glVertex2f(-20.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-25, 25, 0);
+	glScalef(0.04, 0.04, 0);
+	glColor3f(0.98, 0.98, 0.5);
+	draw_string("Ballenger Multiplayer");
+	glPopMatrix();
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(0.0f, 1.0f);
+
+	glColor3f(0, 0, 0);
+	glBegin(GL_QUADS);
+	glVertex2f(5.0f, 15.0f);
+	glVertex2f(5.0f, 5.0f);
+	glVertex2f(-5.0f, 5.0f);
+	glVertex2f(-5.0f, 15.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(5.0f, 15.0f);
+	glVertex2f(5.0f, 5.0f);
+	glVertex2f(-5.0f, 5.0f);
+	glVertex2f(-5.0f, 15.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-4, 10, 0);
+	glScalef(0.03, 0.03, 0);
+	glColor3f(1, 1, 1);
+	draw_string("Start");
+	glPopMatrix();
+
+	glColor3f(0, 0, 0);
+	glBegin(GL_QUADS);
+	glVertex2f(10.0f, -10.0f);
+	glVertex2f(10.0f, 0.0f);
+	glVertex2f(-10.0f, 0.0f);
+	glVertex2f(-10.0f, -10.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(10.0f, -10.0f);
+	glVertex2f(10.0f, 0.0f);
+	glVertex2f(-10.0f, 0.0f);
+	glVertex2f(-10.0f, -10.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-8, -4, 0);
+	glScalef(0.03, 0.03, 0);
+	glColor3f(1, 1, 1);
+	draw_string("Multiplayer");
+	glPopMatrix();
+
+
+	glEnable(GL_LIGHTING);
+	//to enable 3D
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+}
+
+void draw_multiplayer_menu() {
+	glDisable(GL_LIGHTING);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluOrtho2D(-50, 50, -50, 50);
+
+	std::string connectMsg = "Enter the IP address: ";
+	connectMsg.append(ipAddress);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glDisable(GL_CULL_FACE);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glColor3f(0.4, 0, 0.8);
+	glBegin(GL_QUADS);
+	glVertex2f(40.0f, 20.0f);
+	glVertex2f(40.0f, -20.0f);
+	glVertex2f(-40.0f, -20.0f);
+	glVertex2f(-40.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(40.0f, 20.0f);
+	glVertex2f(40.0f, -20.0f);
+	glVertex2f(-40.0f, -20.0f);
+	glVertex2f(-40.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-25, 25, 0);
+	glScalef(0.04, 0.04, 0);
+	glColor3f(0.98, 0.98, 0.5);
+	draw_string("Ballenger Multiplayer");
+	glPopMatrix();
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(0.0f, 1.0f);
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-20, 10, 0);
+	glScalef(0.025, 0.03, 0);
+	glColor3f(1, 1, 1);
+	draw_string(connectMsg);
+	glPopMatrix();
+
+
+	glEnable(GL_LIGHTING);
+	//to enable 3D
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+
+}
+
+void draw_connect_screen() {
+	glDisable(GL_LIGHTING);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluOrtho2D(-50, 50, -50, 50);
+
+	std::string connectMsg = "Connecting to server \n";
+	connectMsg.append(ipAddress);
+	
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glDisable(GL_CULL_FACE);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glColor3f(0.4, 0, 0.8);
+	glBegin(GL_QUADS);
+	glVertex2f(40.0f, 20.0f);
+	glVertex2f(40.0f, -20.0f);
+	glVertex2f(-40.0f, -20.0f);
+	glVertex2f(-40.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(40.0f, 20.0f);
+	glVertex2f(40.0f, -20.0f);
+	glVertex2f(-40.0f, -20.0f);
+	glVertex2f(-40.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-25, 25, 0);
+	glScalef(0.04, 0.04, 0);
+	glColor3f(0.98, 0.98, 0.5);
+	draw_string("Ballenger Multiplayer");
+	glPopMatrix();
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(0.0f, 1.0f);
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-20, 10, 0);
+	glScalef(0.025, 0.03, 0);
+	glColor3f(1, 1, 1);
+	draw_string(connectMsg);
+	glPopMatrix();
+
+	glEnable(GL_LIGHTING);
+	//to enable 3D
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+
 }

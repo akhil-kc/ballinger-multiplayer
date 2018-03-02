@@ -1,8 +1,9 @@
 
 #include "cGame.h"
+#include <iostream>
 
 //Delete console
-#pragma comment(linker, "/subsystem:\"windows\" /entry:\"mainCRTStartup\"")
+//#pragma comment(linker, "/subsystem:\"windows\" /entry:\"mainCRTStartup\"")
 
 cGame Game;
 
@@ -49,7 +50,6 @@ void main(int argc, char** argv)
 
 	//GLUT initialization
 	glutInit(&argc, argv);
-
 	//RGBA with double buffer
 	glutInitDisplayMode(GLUT_DEPTH | GLUT_RGBA | GLUT_ALPHA | GLUT_DOUBLE);
 
@@ -62,7 +62,7 @@ void main(int argc, char** argv)
 	glutInitWindowPosition(pos_x,pos_y);
 	glutInitWindowSize(SCREEN_WIDTH,SCREEN_HEIGHT);
 	glutCreateWindow("The Ballenger");
-	glutFullScreen();
+	//glutFullScreen();
 
 	/*glutGameModeString("800x600:32");
 	glutEnterGameMode();*/
