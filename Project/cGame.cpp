@@ -1,7 +1,6 @@
 #include "cGame.h"
 void draw_start_menu();
-void draw_multiplayer_menu();
-void draw_connect_screen();
+void draw_transition_screen(std::string connectMsg);
 
 cGame::cGame(void) {}
 cGame::~cGame(void){}
@@ -159,6 +158,13 @@ void cGame::Finalize()
 void cGame::ReadKeyboard(unsigned char key, int x, int y, bool press)
 {
 	if (state == STATE_MULTIPLAYER) {
+		if ((key == 'Y' || key == 'y') && !press)
+			// Start Server here. Remove below line
+			state = STATE_MULTIPLAYER;
+		else if (key == 'N' || key == 'n')
+			state = STATE_CLIENT;
+	}
+	if (state == STATE_CLIENT) {
 		if (key == 13)
 			state = STATE_CONNECT;
 		if ((isdigit(key) || key == '.') && !press) {
@@ -170,6 +176,7 @@ void cGame::ReadKeyboard(unsigned char key, int x, int y, bool press)
 	if(key >= 'A' && key <= 'Z') key += 32;
 	keys[key] = press;
 }
+
 void cGame::ReadSpecialKeyboard(unsigned char key, int x, int y, bool press)
 {
 	if(key == GLUT_KEY_F10 && press)
@@ -682,13 +689,21 @@ void cGame::Render()
 		if(i==respawn_id) respawn_points[i].Draw(Data.GetID(IMG_CIRCLE_ON),true,&Shader);
 		else respawn_points[i].Draw(Data.GetID(IMG_CIRCLE_OFF),false,&Shader);
 	}
+	std::string msg;
 
 	switch (state) {
 	case STATE_MENU: draw_start_menu();
 		break;
-	case STATE_MULTIPLAYER: draw_multiplayer_menu();
+	case STATE_MULTIPLAYER: msg = "Start a new Server? (Y/N)";
+		draw_transition_screen(msg);
 		break;
-	case STATE_CONNECT: draw_connect_screen();
+	case STATE_CLIENT: msg = "Enter the IP address: ";
+		msg.append(ipAddress);
+		draw_transition_screen(msg);
+		break;
+	case STATE_CONNECT: msg = "Connecting to server \n";
+		msg.append(ipAddress);
+		draw_transition_screen(msg);
 		break;
 	default: break;
 	}
@@ -711,7 +726,6 @@ void draw_start_menu()
 	glPushMatrix();
 	glLoadIdentity();
 	gluOrtho2D(-50, 50, -50, 50);
-
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
@@ -809,81 +823,12 @@ void draw_start_menu()
 	glMatrixMode(GL_MODELVIEW);
 }
 
-void draw_multiplayer_menu() {
+void draw_transition_screen(std::string connectMsg) {
 	glDisable(GL_LIGHTING);
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
 	gluOrtho2D(-50, 50, -50, 50);
-
-	std::string connectMsg = "Enter the IP address: ";
-	connectMsg.append(ipAddress);
-
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	glDisable(GL_CULL_FACE);
-	glClear(GL_DEPTH_BUFFER_BIT);
-
-	glColor3f(0.4, 0, 0.8);
-	glBegin(GL_QUADS);
-	glVertex2f(40.0f, 20.0f);
-	glVertex2f(40.0f, -20.0f);
-	glVertex2f(-40.0f, -20.0f);
-	glVertex2f(-40.0f, 20.0f);
-	glEnd();
-
-	glLineWidth(3);
-	glColor3f(0.3, 0.7, 0.5);
-	glBegin(GL_LINE_LOOP);
-	glVertex2f(40.0f, 20.0f);
-	glVertex2f(40.0f, -20.0f);
-	glVertex2f(-40.0f, -20.0f);
-	glVertex2f(-40.0f, 20.0f);
-	glEnd();
-
-	glLineWidth(4);
-	glPushMatrix();
-	glTranslatef(-25, 25, 0);
-	glScalef(0.04, 0.04, 0);
-	glColor3f(0.98, 0.98, 0.5);
-	draw_string("Ballenger Multiplayer");
-	glPopMatrix();
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	glClearColor(0.0, 0.0, 0.0, 0.0);
-	glEnable(GL_DEPTH_TEST);
-	glDepthMask(GL_TRUE);
-	glDepthFunc(GL_LEQUAL);
-	glDepthRange(0.0f, 1.0f);
-
-	glLineWidth(4);
-	glPushMatrix();
-	glTranslatef(-20, 10, 0);
-	glScalef(0.025, 0.03, 0);
-	glColor3f(1, 1, 1);
-	draw_string(connectMsg);
-	glPopMatrix();
-
-
-	glEnable(GL_LIGHTING);
-	//to enable 3D
-	glMatrixMode(GL_PROJECTION);
-	glPopMatrix();
-	glMatrixMode(GL_MODELVIEW);
-
-}
-
-void draw_connect_screen() {
-	glDisable(GL_LIGHTING);
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-	glLoadIdentity();
-	gluOrtho2D(-50, 50, -50, 50);
-
-	std::string connectMsg = "Connecting to server \n";
-	connectMsg.append(ipAddress);
-	
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
