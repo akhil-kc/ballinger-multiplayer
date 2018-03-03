@@ -1,0 +1,12 @@
+
+*.log
+*.ipch
+*.exe
+*.iobj
+*.tlog
+*.obj
+*.pdb
+*.ipdb
+*.db
+*.opendb
+*.dll
