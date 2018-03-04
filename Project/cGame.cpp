@@ -1,8 +1,45 @@
+#undef UNICODE
+#define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define WIN32_LEAN_AND_MEAN
+
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <signal.h>
+
+// Need to link with Ws2_32.lib
+#pragma comment (lib, "Ws2_32.lib")
+#pragma comment (lib, "Mswsock.lib")
+#pragma comment (lib, "AdvApi32.lib")
+// #pragma comment (lib, "Mswsock.lib")
+#define SIGINT 2
+#define SIGKILL 9
+#define SIGQUIT 3
+
 #include "cGame.h"
 
+void draw_start_menu();
+void draw_transition_screen(std::string connectMsg);
+void startServer();
+void s_cl(char *a, int x);
+void s_handle(int s);
+int connectToServer();
+DWORD WINAPI receive_cmd_server(LPVOID lpParam);
+DWORD WINAPI receive_cmd_client(LPVOID lpParam);
 cGame::cGame(void) {}
 cGame::~cGame(void){}
-
+SOCKET sock, client;
+char ipAddress[100];
+int ipSize = 0;
+float mx, my, mz;
+Coord playerPos;
+Coord playerPos_recv;
 bool cGame::Init(int lvl)
 {
 	bool res = true;
@@ -11,7 +48,8 @@ bool cGame::Init(int lvl)
 	time = ang = 0.0f;
 	noclipSpeedF = 1.0f; 
 	level = lvl;
-	state = STATE_RUN;
+	//state = STATE_RUN;
+	state = STATE_MENU;
 	respawn_id = 0;
 	pickedkey_id = -1;
 
@@ -124,13 +162,9 @@ bool cGame::Loop()
 	bool res=true;
 	int t1,t2;
 	t1 = glutGet(GLUT_ELAPSED_TIME);
-
-	if(state == STATE_RUN)
-	{
-		res = Process();
-		if(res) Render();
-	}
-	else if(state == STATE_LIVELOSS)
+	
+	Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);
+    if(state == STATE_LIVELOSS)
 	{
 		Render();
 		Player.SetPos(respawn_points[respawn_id].GetX(),respawn_points[respawn_id].GetY()+RADIUS,respawn_points[respawn_id].GetZ());
@@ -139,6 +173,10 @@ bool cGame::Loop()
 	else if(state == STATE_ENDGAME)
 	{
 		res=false;
+	}
+	else {
+		res = Process();
+		if (res) Render();
 	}
 
 	do { t2 = glutGet(GLUT_ELAPSED_TIME);
@@ -153,9 +191,27 @@ void cGame::Finalize()
 //Input
 void cGame::ReadKeyboard(unsigned char key, int x, int y, bool press)
 {
+	if (state == STATE_MULTIPLAYER) {
+		if ((key == 'Y' || key == 'y') && !press) {
+			startServer();
+			state = STATE_RUN;
+		}
+		else if (key == 'N' || key == 'n')
+			state = STATE_CLIENT;
+	}
+	if (state == STATE_CLIENT) {
+		if (key == 13)
+			state = STATE_CONNECT;
+		if ((isdigit(key) || key == '.') && !press) {
+			ipAddress[ipSize] = key;
+			ipSize++;
+		}
+		return;
+	}
 	if(key >= 'A' && key <= 'Z') key += 32;
 	keys[key] = press;
 }
+
 void cGame::ReadSpecialKeyboard(unsigned char key, int x, int y, bool press)
 {
 	if(key == GLUT_KEY_F10 && press)
@@ -223,214 +279,229 @@ bool cGame::Process()
 	//Process Input
 	if(keys[27])	res=false;
 
-	float vx,vy,vz;
-	Camera.GetDirectionVector(vx,vy,vz);
-	float factor = sqrt( 1.0f/(vx*vx + vz*vz) );
-
-	if(keys['1']) Camera.SetState(STATE_FPS);
-	Player.SetFade(!keys['2']);
-	if(keys['3']) Camera.SetState(STATE_TPS);
-
-	if(noclip)
-	{
-		if(keys[P_UP])
-		{
-			Player.SetX(Player.GetX() + noclipSpeedF*vx);
-			Player.SetY(Player.GetY() + noclipSpeedF*vy);
-			Player.SetZ(Player.GetZ() + noclipSpeedF*vz);
-			if(Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw());
+	if (state == STATE_MENU) {
+		if (keys['s']) {
+			state = STATE_RUN;
+			Render();
+			//	return;
 		}
-		else if(keys[P_DOWN])
-		{
-			Player.SetX(Player.GetX() - noclipSpeedF*vx);
-			Player.SetY(Player.GetY() - noclipSpeedF*vy);
-			Player.SetZ(Player.GetZ() - noclipSpeedF*vz);
-			if(Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw()-PI);
-		}
-		if(keys[P_LEFT])
-		{
-			Player.SetX(Player.GetX() + noclipSpeedF*vz*factor);
-			Player.SetZ(Player.GetZ() - noclipSpeedF*vx*factor);
-			if(Camera.GetState() == STATE_TPS_FREE)
-			{
-				if(keys['w']) Camera.SetLastYaw(Camera.GetYaw()-PI/4);
-				else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw()-(PI*3)/4);
-				else Camera.SetLastYaw(Camera.GetYaw()-PI/2);
-			}
-		}
-		else if(keys[P_RIGHT])
-		{
-			Player.SetX(Player.GetX() - noclipSpeedF*vz*factor);
-			Player.SetZ(Player.GetZ() + noclipSpeedF*vx*factor);
-			if(Camera.GetState() == STATE_TPS_FREE)
-			{
-				if(keys['w']) Camera.SetLastYaw(Camera.GetYaw()+PI/4);
-				else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw()+(PI*3)/4);
-				else Camera.SetLastYaw(Camera.GetYaw()+PI/2);
-			}
-		}
-		if(mouse_left_down) Player.SetY(Player.GetY() + noclipSpeedF);
-		else if(mouse_right_down) Player.SetY(Player.GetY() - noclipSpeedF);
-		if(keys[P_PLUS])
-		{
-			noclipSpeedF += 0.01f;
-			if(noclipSpeedF > 2.0f) noclipSpeedF = 2.0f;
-		}
-		else if(keys[P_MINUS])
-		{
-			noclipSpeedF -= 0.01f;
-			if(noclipSpeedF < 0.05f) noclipSpeedF = 0.05f;
+		else if (keys['m']) {
+			state = STATE_MULTIPLAYER;
+			Render();
 		}
 	}
-	else
-	{
-		if(keys[P_UP])
-		{
-			float nextVX = Player.GetVX() + PLAYER_SPEED*vx*factor;
-			float nextVZ = Player.GetVZ() + PLAYER_SPEED*vz*factor;
-			float limitation_factor;
-			if( sqrt(nextVX*nextVX + nextVZ*nextVZ) <= MAX_MOVEMENT ) limitation_factor = 1.0f;
-			else limitation_factor = sqrt( (MAX_MOVEMENT*MAX_MOVEMENT)/(nextVX*nextVX + nextVZ*nextVZ) );
-			Player.SetVX(nextVX*limitation_factor);
-			Player.SetVZ(nextVZ*limitation_factor);
+	else {
 
-			if(Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw());
-		}
-		else if(keys[P_DOWN])
-		{
-			float nextVX = Player.GetVX() - PLAYER_SPEED*vx*factor;
-			float nextVZ = Player.GetVZ() - PLAYER_SPEED*vz*factor;
-			float limitation_factor;
-			if( sqrt(nextVX*nextVX + nextVZ*nextVZ) <= MAX_MOVEMENT ) limitation_factor = 1.0f;
-			else limitation_factor = sqrt( (MAX_MOVEMENT*MAX_MOVEMENT)/(nextVX*nextVX + nextVZ*nextVZ) );
-			Player.SetVX(nextVX*limitation_factor);
-			Player.SetVZ(nextVZ*limitation_factor);
 
-			if(Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw()-PI);
-		}
-		if(keys[P_LEFT])
-		{
-			float nextVX = Player.GetVX() + PLAYER_SPEED*vz*factor;
-			float nextVZ = Player.GetVZ() - PLAYER_SPEED*vx*factor;
-			float limitation_factor;
-			if( sqrt(nextVX*nextVX + nextVZ*nextVZ) <= MAX_MOVEMENT ) limitation_factor = 1.0f;
-			else limitation_factor = sqrt( (MAX_MOVEMENT*MAX_MOVEMENT)/(nextVX*nextVX + nextVZ*nextVZ) );
-			Player.SetVX(nextVX*limitation_factor);
-			Player.SetVZ(nextVZ*limitation_factor);
+		float vx, vy, vz;
+		Camera.GetDirectionVector(vx, vy, vz);
+		float factor = sqrt(1.0f / (vx*vx + vz * vz));
 
-			if(Camera.GetState() == STATE_TPS_FREE)
+		if (keys['1']) Camera.SetState(STATE_FPS);
+		Player.SetFade(!keys['2']);
+		if (keys['3']) Camera.SetState(STATE_TPS);
+
+
+		if (noclip)
+		{
+			if (keys[P_UP])
 			{
-				if(keys['w']) Camera.SetLastYaw(Camera.GetYaw()-PI/4);
-				else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw()-(PI*3)/4);
-				else Camera.SetLastYaw(Camera.GetYaw()-PI/2);
+				Player.SetX(Player.GetX() + noclipSpeedF * vx);
+				Player.SetY(Player.GetY() + noclipSpeedF * vy);
+				Player.SetZ(Player.GetZ() + noclipSpeedF * vz);
+				if (Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw());
 			}
-		}
-		else if(keys[P_RIGHT])
-		{
-			float nextVX = Player.GetVX() - PLAYER_SPEED*vz*factor;
-			float nextVZ = Player.GetVZ() + PLAYER_SPEED*vx*factor;
-			float limitation_factor;
-			if( sqrt(nextVX*nextVX + nextVZ*nextVZ) <= MAX_MOVEMENT ) limitation_factor = 1.0f;
-			else limitation_factor = sqrt( (MAX_MOVEMENT*MAX_MOVEMENT)/(nextVX*nextVX + nextVZ*nextVZ) );
-			Player.SetVX(nextVX*limitation_factor);
-			Player.SetVZ(nextVZ*limitation_factor);
-			
-			if(Camera.GetState() == STATE_TPS_FREE)
+			else if (keys[P_DOWN])
 			{
-				if(keys['w']) Camera.SetLastYaw(Camera.GetYaw()+PI/4);
-				else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw()+(PI*3)/4);
-				else Camera.SetLastYaw(Camera.GetYaw()+PI/2);
+				Player.SetX(Player.GetX() - noclipSpeedF * vx);
+				Player.SetY(Player.GetY() - noclipSpeedF * vy);
+				Player.SetZ(Player.GetZ() - noclipSpeedF * vz);
+				if (Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw() - PI);
 			}
-		}
-		if(keys[P_JUMP])
-		{
-			if(Player.GetY()-RADIUS < Terrain.GetHeight(Player.GetX(),Player.GetZ())+0.01f)
+			if (keys[P_LEFT])
 			{
-				Player.SetVY(PLAYER_JUMP_SPEED);
-				Sound.PlayBounce(1.0f);
-			}
-		}
-
-		float initial_z = Player.GetZ();
-		Physics(Player);
-
-		//comprueba si el player muere
-		if(Player.GetY() <= Lava.GetHeight()+RADIUS)
-		{
-			Player.SetY(Lava.GetHeight()+RADIUS);
-			Player.SetVel(0.0f,0.0f,0.0f);
-			pickedkey_id = -1;
-			state = STATE_LIVELOSS;
-			Sound.Play(SOUND_SWISH);
-		}
-
-		Coord P; P.x = Player.GetX(); P.y = Player.GetY(); P.z = Player.GetZ();
-		float r = RADIUS;
-
-		//comprueba si el player entra en algun Respawn Point
-		float cr = CIRCLE_RADIUS,ah = AURA_HEIGHT;
-		for(unsigned int i=0; i<respawn_points.size(); i++)
-		{
-			Coord RP; RP.x = respawn_points[i].GetX(); RP.y = respawn_points[i].GetY(); RP.z = respawn_points[i].GetZ(); 
-			if( sqrt((P.x-RP.x)*(P.x-RP.x) + (P.y-RP.y)*(P.y-RP.y) + (P.z-RP.z)*(P.z-RP.z)) <= RADIUS+CIRCLE_RADIUS)
-			{
-				if(respawn_id != i) Sound.Play(SOUND_SWISH);
-				respawn_id = i;
-			}
-		}
-
-		//comprueba si el player recoge alguna llave
-		if(pickedkey_id == -1)
-		{
-			for(unsigned int i=0; i<target_keys.size(); i++)
-			{
-				if(!target_keys[i].IsDeployed())
+				Player.SetX(Player.GetX() + noclipSpeedF * vz*factor);
+				Player.SetZ(Player.GetZ() - noclipSpeedF * vx*factor);
+				if (Camera.GetState() == STATE_TPS_FREE)
 				{
-					Coord K; K.x = target_keys[i].GetX(); K.y = target_keys[i].GetY(); K.z = target_keys[i].GetZ(); 
-					if( sqrt((P.x-K.x)*(P.x-K.x) + (P.y-K.y)*(P.y-K.y) + (P.z-K.z)*(P.z-K.z)) <= RADIUS*2)
+					if (keys['w']) Camera.SetLastYaw(Camera.GetYaw() - PI / 4);
+					else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw() - (PI * 3) / 4);
+					else Camera.SetLastYaw(Camera.GetYaw() - PI / 2);
+				}
+			}
+			else if (keys[P_RIGHT])
+			{
+				Player.SetX(Player.GetX() - noclipSpeedF * vz*factor);
+				Player.SetZ(Player.GetZ() + noclipSpeedF * vx*factor);
+				if (Camera.GetState() == STATE_TPS_FREE)
+				{
+					if (keys['w']) Camera.SetLastYaw(Camera.GetYaw() + PI / 4);
+					else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw() + (PI * 3) / 4);
+					else Camera.SetLastYaw(Camera.GetYaw() + PI / 2);
+				}
+			}
+			if (mouse_left_down) Player.SetY(Player.GetY() + noclipSpeedF);
+			else if (mouse_right_down) Player.SetY(Player.GetY() - noclipSpeedF);
+			if (keys[P_PLUS])
+			{
+				noclipSpeedF += 0.01f;
+				if (noclipSpeedF > 2.0f) noclipSpeedF = 2.0f;
+			}
+			else if (keys[P_MINUS])
+			{
+				noclipSpeedF -= 0.01f;
+				if (noclipSpeedF < 0.05f) noclipSpeedF = 0.05f;
+			}
+		}
+		else
+		{
+			if (keys[P_UP])
+			{
+				float nextVX = Player.GetVX() + PLAYER_SPEED * vx*factor;
+				float nextVZ = Player.GetVZ() + PLAYER_SPEED * vz*factor;
+				float limitation_factor;
+				if (sqrt(nextVX*nextVX + nextVZ * nextVZ) <= MAX_MOVEMENT) limitation_factor = 1.0f;
+				else limitation_factor = sqrt((MAX_MOVEMENT*MAX_MOVEMENT) / (nextVX*nextVX + nextVZ * nextVZ));
+				Player.SetVX(nextVX*limitation_factor);
+				Player.SetVZ(nextVZ*limitation_factor);
+
+				if (Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw());
+			}
+			else if (keys[P_DOWN])
+			{
+				float nextVX = Player.GetVX() - PLAYER_SPEED * vx*factor;
+				float nextVZ = Player.GetVZ() - PLAYER_SPEED * vz*factor;
+				float limitation_factor;
+				if (sqrt(nextVX*nextVX + nextVZ * nextVZ) <= MAX_MOVEMENT) limitation_factor = 1.0f;
+				else limitation_factor = sqrt((MAX_MOVEMENT*MAX_MOVEMENT) / (nextVX*nextVX + nextVZ * nextVZ));
+				Player.SetVX(nextVX*limitation_factor);
+				Player.SetVZ(nextVZ*limitation_factor);
+
+				if (Camera.GetState() == STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw() - PI);
+			}
+			if (keys[P_LEFT])
+			{
+				float nextVX = Player.GetVX() + PLAYER_SPEED * vz*factor;
+				float nextVZ = Player.GetVZ() - PLAYER_SPEED * vx*factor;
+				float limitation_factor;
+				if (sqrt(nextVX*nextVX + nextVZ * nextVZ) <= MAX_MOVEMENT) limitation_factor = 1.0f;
+				else limitation_factor = sqrt((MAX_MOVEMENT*MAX_MOVEMENT) / (nextVX*nextVX + nextVZ * nextVZ));
+				Player.SetVX(nextVX*limitation_factor);
+				Player.SetVZ(nextVZ*limitation_factor);
+
+				if (Camera.GetState() == STATE_TPS_FREE)
+				{
+					if (keys['w']) Camera.SetLastYaw(Camera.GetYaw() - PI / 4);
+					else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw() - (PI * 3) / 4);
+					else Camera.SetLastYaw(Camera.GetYaw() - PI / 2);
+				}
+			}
+			else if (keys[P_RIGHT])
+			{
+				float nextVX = Player.GetVX() - PLAYER_SPEED * vz*factor;
+				float nextVZ = Player.GetVZ() + PLAYER_SPEED * vx*factor;
+				float limitation_factor;
+				if (sqrt(nextVX*nextVX + nextVZ * nextVZ) <= MAX_MOVEMENT) limitation_factor = 1.0f;
+				else limitation_factor = sqrt((MAX_MOVEMENT*MAX_MOVEMENT) / (nextVX*nextVX + nextVZ * nextVZ));
+				Player.SetVX(nextVX*limitation_factor);
+				Player.SetVZ(nextVZ*limitation_factor);
+
+				if (Camera.GetState() == STATE_TPS_FREE)
+				{
+					if (keys['w']) Camera.SetLastYaw(Camera.GetYaw() + PI / 4);
+					else if (keys['s']) Camera.SetLastYaw(Camera.GetYaw() + (PI * 3) / 4);
+					else Camera.SetLastYaw(Camera.GetYaw() + PI / 2);
+				}
+			}
+			if (keys[P_JUMP])
+			{
+				if (Player.GetY() - RADIUS < Terrain.GetHeight(Player.GetX(), Player.GetZ()) + 0.01f)
+				{
+					Player.SetVY(PLAYER_JUMP_SPEED);
+					Sound.PlayBounce(1.0f);
+				}
+			}
+
+			float initial_z = Player.GetZ();
+			Physics(Player);
+
+			//comprueba si el player muere
+			if (Player.GetY() <= Lava.GetHeight() + RADIUS)
+			{
+				Player.SetY(Lava.GetHeight() + RADIUS);
+				Player.SetVel(0.0f, 0.0f, 0.0f);
+				pickedkey_id = -1;
+				state = STATE_LIVELOSS;
+				Sound.Play(SOUND_SWISH);
+			}
+
+			Coord P; P.x = Player.GetX(); P.y = Player.GetY(); P.z = Player.GetZ();
+			float r = RADIUS;
+
+			//comprueba si el player entra en algun Respawn Point
+			float cr = CIRCLE_RADIUS, ah = AURA_HEIGHT;
+			for (unsigned int i = 0; i < respawn_points.size(); i++)
+			{
+				Coord RP; RP.x = respawn_points[i].GetX(); RP.y = respawn_points[i].GetY(); RP.z = respawn_points[i].GetZ();
+				if (sqrt((P.x - RP.x)*(P.x - RP.x) + (P.y - RP.y)*(P.y - RP.y) + (P.z - RP.z)*(P.z - RP.z)) <= RADIUS + CIRCLE_RADIUS)
+				{
+					if (respawn_id != i) Sound.Play(SOUND_SWISH);
+					respawn_id = i;
+				}
+			}
+
+			//comprueba si el player recoge alguna llave
+			if (pickedkey_id == -1)
+			{
+				for (unsigned int i = 0; i < target_keys.size(); i++)
+				{
+					if (!target_keys[i].IsDeployed())
 					{
-						pickedkey_id = i;
-						Sound.Play(SOUND_PICKUP);
+						Coord K; K.x = target_keys[i].GetX(); K.y = target_keys[i].GetY(); K.z = target_keys[i].GetZ();
+						if (sqrt((P.x - K.x)*(P.x - K.x) + (P.y - K.y)*(P.y - K.y) + (P.z - K.z)*(P.z - K.z)) <= RADIUS * 2)
+						{
+							pickedkey_id = i;
+							Sound.Play(SOUND_PICKUP);
+						}
 					}
 				}
 			}
-		}
 
-		//comprueba si el player llega con una llave a su respectiva columna
-		if(pickedkey_id != -1)
-		{
-			if( columns[pickedkey_id].InsideGatheringArea(P.x,P.y,P.z) )
+			//comprueba si el player llega con una llave a su respectiva columna
+			if (pickedkey_id != -1)
 			{
-				Sound.Play(SOUND_UNLOCK);
-				Sound.Play(SOUND_ENERGYFLOW);
-				target_keys[pickedkey_id].Deploy();
-				pickedkey_id = -1;
-				if(respawn_id)
+				if (columns[pickedkey_id].InsideGatheringArea(P.x, P.y, P.z))
 				{
-					Sound.Play(SOUND_SWISH);
-					respawn_id = 0;
+					Sound.Play(SOUND_UNLOCK);
+					Sound.Play(SOUND_ENERGYFLOW);
+					target_keys[pickedkey_id].Deploy();
+					pickedkey_id = -1;
+					if (respawn_id)
+					{
+						Sound.Play(SOUND_SWISH);
+						respawn_id = 0;
+					}
+					bool all_keys_deployed = true;
+					for (unsigned int i = 0; all_keys_deployed && i < target_keys.size(); i++) all_keys_deployed = target_keys[i].IsDeployed();
+					portal_activated = all_keys_deployed;
+					if (portal_activated) Sound.Play(SOUND_WARP);
 				}
-				bool all_keys_deployed = true;
-				for(unsigned int i=0; all_keys_deployed && i<target_keys.size(); i++) all_keys_deployed = target_keys[i].IsDeployed();
-				portal_activated = all_keys_deployed;
-				if(portal_activated) Sound.Play(SOUND_WARP);
 			}
-		}
 
-		//comprueba si el player atraviesa el portal estando activado
-		if(portal_activated)
-		{
-			if( Portal.InsidePortal(P.x,P.y,P.z,RADIUS) )
+			//comprueba si el player atraviesa el portal estando activado
+			if (portal_activated)
 			{
-				if( (initial_z-Portal.GetZ() <= 0.0f && Player.GetZ()-Portal.GetZ() >= 0.0f) || 
-				    (initial_z-Portal.GetZ() >= 0.0f && Player.GetZ()-Portal.GetZ() <= 0.0f)  ) state = STATE_ENDGAME;
+				if (Portal.InsidePortal(P.x, P.y, P.z, RADIUS))
+				{
+					if ((initial_z - Portal.GetZ() <= 0.0f && Player.GetZ() - Portal.GetZ() >= 0.0f) ||
+						(initial_z - Portal.GetZ() >= 0.0f && Player.GetZ() - Portal.GetZ() <= 0.0f)) state = STATE_ENDGAME;
+				}
 			}
 		}
+
+		//limpio buffer de sonidos
+		Sound.Update();
 	}
-
-	//limpio buffer de sonidos
-	Sound.Update();
-
 	return res;
 }
 
@@ -575,11 +646,11 @@ void cGame::Render()
 	Camera.Update(&Terrain, &Lava, Player.GetX(), Player.GetY(), Player.GetZ());
 	ang = fmod(ang+2,360);
 
-	Coord playerPos; playerPos.x = Player.GetX(); playerPos.y = Player.GetY(); playerPos.z = Player.GetZ();
+	 playerPos.x = Player.GetX(); playerPos.y = Player.GetY(); playerPos.z = Player.GetZ();
 
 	//draw scene(terrain + lava + skybox)
 	Scene.Draw(&Data,&Terrain,&Lava,&Shader,playerPos);
-
+	
 	//draw keys
 	for(unsigned int i=0; i<target_keys.size(); i++)
 	{
@@ -634,6 +705,7 @@ void cGame::Render()
 	{
 		//draw player
 		Player.Draw(&Data,&Camera,&Lava,&Shader);
+		Player2.Draw(&Data, &Camera, &Lava, &Shader);
 
 		//draw portal
 		Portal.Draw(&Data,portal_activated,&Shader,&Model);
@@ -645,6 +717,7 @@ void cGame::Render()
 	
 		//draw player
 		Player.Draw(&Data,&Camera,&Lava,&Shader);
+		Player2.Draw(&Data, &Camera, &Lava, &Shader);
 	}
 
 	//draw respawn points
@@ -654,5 +727,449 @@ void cGame::Render()
 		else respawn_points[i].Draw(Data.GetID(IMG_CIRCLE_OFF),false,&Shader);
 	}
 
+	std::string msg;
+	switch (state) {
+	case STATE_MENU: draw_start_menu();
+		break;
+	case STATE_MULTIPLAYER: msg = "Start a new Server? (Y/N)";
+		draw_transition_screen(msg);
+		break;
+	case STATE_CONNECT: msg = "Connecting to server \n";
+		msg.append(ipAddress);
+		draw_transition_screen(msg);
+		connectToServer();
+		state = STATE_RUN;
+		break;
+	case STATE_CLIENT: msg = "Enter the IP address: ";
+		msg.append(ipAddress);
+		draw_transition_screen(msg);
+		break;
+	default: break;
+	}
+
 	glutSwapBuffers();
+}
+
+void draw_string(std::string str)
+{
+	for (unsigned int i = 0; i<str.length(); i++)
+	{
+		glutStrokeCharacter(GLUT_STROKE_ROMAN, *(str.begin() + i));
+	}
+}
+
+void draw_start_menu()
+{
+	glDisable(GL_LIGHTING);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluOrtho2D(-50, 50, -50, 50);
+
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glDisable(GL_CULL_FACE);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glColor3f(0.4, 0, 0.8);
+	glBegin(GL_QUADS);
+	glVertex2f(20.0f, 20.0f);
+	glVertex2f(20.0f, -20.0f);
+	glVertex2f(-20.0f, -20.0f);
+	glVertex2f(-20.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(20.0f, 20.0f);
+	glVertex2f(20.0f, -20.0f);
+	glVertex2f(-20.0f, -20.0f);
+	glVertex2f(-20.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-25, 25, 0);
+	glScalef(0.04, 0.04, 0);
+	glColor3f(0.98, 0.98, 0.5);
+	draw_string("Ballenger Multiplayer");
+	glPopMatrix();
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(0.0f, 1.0f);
+
+	glColor3f(0, 0, 0);
+	glBegin(GL_QUADS);
+	glVertex2f(5.0f, 15.0f);
+	glVertex2f(5.0f, 5.0f);
+	glVertex2f(-5.0f, 5.0f);
+	glVertex2f(-5.0f, 15.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(5.0f, 15.0f);
+	glVertex2f(5.0f, 5.0f);
+	glVertex2f(-5.0f, 5.0f);
+	glVertex2f(-5.0f, 15.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-4, 10, 0);
+	glScalef(0.03, 0.03, 0);
+	glColor3f(1, 1, 1);
+	draw_string("Start");
+	glPopMatrix();
+
+	glColor3f(0, 0, 0);
+	glBegin(GL_QUADS);
+	glVertex2f(10.0f, -10.0f);
+	glVertex2f(10.0f, 0.0f);
+	glVertex2f(-10.0f, 0.0f);
+	glVertex2f(-10.0f, -10.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(10.0f, -10.0f);
+	glVertex2f(10.0f, 0.0f);
+	glVertex2f(-10.0f, 0.0f);
+	glVertex2f(-10.0f, -10.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-8, -4, 0);
+	glScalef(0.03, 0.03, 0);
+	glColor3f(1, 1, 1);
+	draw_string("Multiplayer");
+	glPopMatrix();
+
+
+	glEnable(GL_LIGHTING);
+	//to enable 3D
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+}
+
+void draw_transition_screen(std::string connectMsg) {
+	glDisable(GL_LIGHTING);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluOrtho2D(-50, 50, -50, 50);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glDisable(GL_CULL_FACE);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glColor3f(0.4, 0, 0.8);
+	glBegin(GL_QUADS);
+	glVertex2f(40.0f, 20.0f);
+	glVertex2f(40.0f, -20.0f);
+	glVertex2f(-40.0f, -20.0f);
+	glVertex2f(-40.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(40.0f, 20.0f);
+	glVertex2f(40.0f, -20.0f);
+	glVertex2f(-40.0f, -20.0f);
+	glVertex2f(-40.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-25, 25, 0);
+	glScalef(0.04, 0.04, 0);
+	glColor3f(0.98, 0.98, 0.5);
+	draw_string("Ballenger Multiplayer");
+	glPopMatrix();
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(0.0f, 1.0f);
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-20, 10, 0);
+	glScalef(0.025, 0.03, 0);
+	glColor3f(1, 1, 1);
+	draw_string(connectMsg);
+	glPopMatrix();
+
+	glEnable(GL_LIGHTING);
+	//to enable 3D
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+
+}
+
+int connectToServer()
+{
+	sockaddr_in ser;
+	sockaddr addr;
+	WSADATA data;
+	DWORD poll;
+	int res;
+	ser.sin_family = AF_INET;
+	ser.sin_port = htons(123);                    //Set the port
+	ser.sin_addr.s_addr = inet_addr(ipAddress);      //Set the address we want to connect to
+
+	memcpy(&addr, &ser, sizeof(SOCKADDR_IN));
+
+	res = WSAStartup(MAKEWORD(1, 1), &data);      //Start Winsock
+	std::cout << "\n\nWSAStartup"
+		<< "\nVersion: " << data.wVersion
+		<< "\nDescription: " << data.szDescription
+		<< "\nStatus: " << data.szSystemStatus;
+	std::cout << "\n";
+	if (res != 0)
+		s_cl("WSAStarup failed", WSAGetLastError());
+
+	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);       //Create the socket
+	if (sock == INVALID_SOCKET)
+		s_cl("Invalid Socket ", WSAGetLastError());
+	else if (sock == SOCKET_ERROR)
+		s_cl("Socket Error)", WSAGetLastError());
+	else
+		std::cout << "Socket Established\n";
+
+	res = connect(sock, &addr, sizeof(addr));               //Connect to the server
+	if (res != 0)
+	{
+		s_cl("SERVER UNAVAILABLE", res);
+		exit(0);
+	}
+	else
+	{
+		std::cout << "\nConnected to Server: ";
+		memcpy(&ser, &addr, sizeof(SOCKADDR));
+	}
+
+	CreateThread(NULL, 0, receive_cmd_client, (LPVOID)sock, 0, &poll);
+}
+
+DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
+
+	char RecvdData[100] = "";
+	int ret, res;
+	char buf[100];
+	SOCKET current_server = (SOCKET)lpParam;
+	std::cout << "Client Thread Created\n";
+
+	while (true)
+	{
+		strcpy(buf, "");
+		//std::cout << "\nEnter message to send ->\n";
+		//fgets(buf, sizeof(buf), stdin);
+		sprintf(buf, "%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+
+		//Sleep(5);
+		res = send(current_server, buf, sizeof(buf), 0);
+
+		if (res == 0)
+		{
+			//0==other side terminated conn
+			printf("\nSERVER terminated connection\n");
+			//Sleep(40);
+			closesocket(current_server);
+			//closesocket(client);
+			//client = 0;
+			break;
+		}
+		else if (res == SOCKET_ERROR)
+		{
+			//-1 == send error
+			printf("Socket error,,,,didnt send\n");
+			//Sleep(40);
+			s_handle(res);
+			break;
+		}
+		
+		ret = recv(current_server, RecvdData, sizeof(RecvdData), 0);
+		if (ret > 0)
+		{
+			std::cout << "From Server\n" << RecvdData;
+			char * token = strtok(RecvdData, ",");
+			float newPos[3];
+			int i = 0;
+			/* walk through other tokens */
+			while (token != NULL) {
+				newPos[i] = atof(token);
+				token = strtok(NULL, ",");
+				i++;
+			}
+			playerPos_recv.x = newPos[0];
+			playerPos_recv.y = newPos[1];
+			playerPos_recv.z = newPos[2];
+		}
+		strcpy(RecvdData, "");
+		strcpy(buf, "");
+	}
+	
+	return 1;
+}
+
+void s_handle(int s)
+{
+	if (sock)
+		closesocket(sock);
+	if (client)
+		closesocket(client);
+	WSACleanup();
+	//Sleep(1000);
+	std::cout << "EXIT SIGNAL :" << s;
+	//exit(0);
+}
+
+
+void s_cl(char *a, int x)
+{
+	std::cout << a;
+	s_handle(x + 1000);
+}
+
+void startServer()
+{
+	int i = 0;
+	printf("Starting up multi-threaded TCP server\r\n");
+
+	// our masterSocket(socket that listens for connections)
+	SOCKET sock;
+
+	// for our thread
+	DWORD thread;
+
+	WSADATA wsaData;
+	sockaddr_in server;
+
+	// start winsock
+	int ret = WSAStartup(0x101, &wsaData); // use highest version of winsock avalible
+
+	if (ret != 0)
+	{
+		printf("server didnt startup\n");
+		exit(0);
+	}
+
+	// fill in winsock struct ... 
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(123); // listen on telnet port 23
+
+	// create our socket
+	sock = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (sock == INVALID_SOCKET)
+	{
+		printf("invalid socket\n");
+		exit(0);
+	}
+
+	// bind our socket to a port(port 123) 
+	if (bind(sock, (sockaddr*)&server, sizeof(server)) != 0)
+	{
+		printf("binding error\n");
+		exit(0);
+	}
+
+	// listen for a connection  
+	if (listen(sock, 5) != 0)
+	{
+		printf("listen error\n");
+		exit(0);
+	}
+	printf("waiting for client to connect\n");
+	// socket that we snedzrecv data on
+	SOCKET client;
+
+	sockaddr_in from;
+	int fromlen = sizeof(from);
+
+	// loop forever 
+
+	// accept connections
+	client = accept(sock, (struct sockaddr*)&from, &fromlen);
+	printf("Client connected\r\n"); 
+
+	CreateThread(NULL, 0, receive_cmd_server, (LPVOID)client, 0, &thread);
+
+}
+
+DWORD WINAPI receive_cmd_server(LPVOID lpParam)
+{
+	printf("Server thread created\r\n");
+
+	// set our socket to the socket passed in as a parameter   
+	SOCKET current_client = (SOCKET)lpParam;
+
+	// buffer to hold our recived data
+	char buf[100];
+	// buffer to hold our sent data
+	char sendData[100];
+	// for error checking 
+	int res;
+
+	// our recv loop
+	while (true)
+	{
+		res = recv(current_client, buf, sizeof(buf), 0); // recv cmds
+
+														 //Sleep(10);
+
+		if (res == 0)
+		{
+			MessageBox(0, "error", "error", MB_OK);
+			closesocket(current_client);
+			ExitThread(0);
+		}
+		else {
+			std::cout << "From Client: " << buf;
+			std::cout << "\n";
+			
+			char * token = strtok(buf, ",");
+			float newPos[3];
+			int i = 0;
+			/* walk through other tokens */
+			while (token != NULL) {
+				newPos[i] = atof(token);
+				token = strtok(NULL, ",");
+				i++;
+			}
+			playerPos_recv.x = newPos[0];
+			playerPos_recv.y = newPos[1];
+			playerPos_recv.z = newPos[2];
+
+			strcpy(buf, "");
+		}
+				
+		sprintf(sendData, "%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+		//strcpy(sendData, "Invalid cmd\n");
+		Sleep(10);
+		send(current_client, sendData, sizeof(sendData), 0);
+
+		// clear buffers
+		strcpy(sendData, "");
+		strcpy(buf, "");
+	}
 }

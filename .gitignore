@@ -1,4 +1,3 @@
-
 *.log
 *.ipch
 *.exe
@@ -10,3 +9,17 @@
 *.db
 *.opendb
 *.dll
+Project/.vs/3DEngine/v15/.suo
+*.exe
+*.iobj
+*.obj
+Project/.vs/3DEngine/v15/.suo
+*.ipch
+*.log
+*.lastbuildstate
+*.tlog
+*.db
+*.opendb
+*.ipdb
+*.pdb
+*.db

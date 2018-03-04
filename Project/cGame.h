@@ -16,7 +16,11 @@
 enum{
 	STATE_LIVELOSS,
 	STATE_RUN,
-	STATE_ENDGAME
+	STATE_ENDGAME,
+	STATE_MENU,
+	STATE_MULTIPLAYER,
+	STATE_CONNECT,
+	STATE_CLIENT
 };
 
 #define TOTAL_LEVELS	  1
@@ -64,6 +68,7 @@ public:
 	cScene Scene;
 	cData Data;
 	cPlayer Player;
+	cPlayer Player2;
 	cCamera Camera;
 	cSound Sound;
 	cShader Shader;
@@ -72,4 +77,5 @@ public:
 	cLava Lava;
 
 	void Physics(cBicho &object);
+	
 };
