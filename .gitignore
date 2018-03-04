@@ -1,11 +1,18 @@
-
-Project/.vs/3DEngine/v15/.suo
+*.log
+*.ipch
+*.exe
+*.iobj
+*.tlog
+*.obj
+*.pdb
+*.ipdb
+*.db
+*.opendb
+*.dll
 Project/.vs/3DEngine/v15/.suo
 *.exe
 *.iobj
 *.obj
-Project/.vs/3DEngine/v15/.suo
-Project/.vs/3DEngine/v15/.suo
 Project/.vs/3DEngine/v15/.suo
 *.ipch
 *.log
@@ -16,3 +23,4 @@ Project/.vs/3DEngine/v15/.suo
 *.ipdb
 *.pdb
 *.db
+Project/.vs/3DEngine/v15/.suo

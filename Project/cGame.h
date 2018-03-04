@@ -55,7 +55,7 @@ public:
 	void Reshape(int w, int h);
 	void Render();
 
-private:
+public:
 	unsigned char keys[256];
 	bool mouse_left_down,mouse_right_down;
 	int level,state,respawn_id,pickedkey_id;
@@ -68,6 +68,7 @@ private:
 	cScene Scene;
 	cData Data;
 	cPlayer Player;
+	cPlayer Player2;
 	cCamera Camera;
 	cSound Sound;
 	cShader Shader;
@@ -76,4 +77,5 @@ private:
 	cLava Lava;
 
 	void Physics(cBicho &object);
+	
 };

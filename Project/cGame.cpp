@@ -1,12 +1,45 @@
+#undef UNICODE
+#define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define WIN32_LEAN_AND_MEAN
+
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <signal.h>
+
+// Need to link with Ws2_32.lib
+#pragma comment (lib, "Ws2_32.lib")
+#pragma comment (lib, "Mswsock.lib")
+#pragma comment (lib, "AdvApi32.lib")
+// #pragma comment (lib, "Mswsock.lib")
+#define SIGINT 2
+#define SIGKILL 9
+#define SIGQUIT 3
+
 #include "cGame.h"
+
 void draw_start_menu();
 void draw_transition_screen(std::string connectMsg);
-
+void startServer();
+void s_cl(char *a, int x);
+void s_handle(int s);
+int connectToServer();
+DWORD WINAPI receive_cmd_server(LPVOID lpParam);
+DWORD WINAPI receive_cmd_client(LPVOID lpParam);
 cGame::cGame(void) {}
 cGame::~cGame(void){}
-
+SOCKET sock, client;
 char ipAddress[100];
 int ipSize = 0;
+float mx, my, mz;
+Coord playerPos;
+Coord playerPos_recv;
 bool cGame::Init(int lvl)
 {
 	bool res = true;
@@ -129,7 +162,8 @@ bool cGame::Loop()
 	bool res=true;
 	int t1,t2;
 	t1 = glutGet(GLUT_ELAPSED_TIME);
-
+	
+	Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);
     if(state == STATE_LIVELOSS)
 	{
 		Render();
@@ -158,9 +192,10 @@ void cGame::Finalize()
 void cGame::ReadKeyboard(unsigned char key, int x, int y, bool press)
 {
 	if (state == STATE_MULTIPLAYER) {
-		if ((key == 'Y' || key == 'y') && !press)
-			// Start Server here. Remove below line
-			state = STATE_MULTIPLAYER;
+		if ((key == 'Y' || key == 'y') && !press) {
+			startServer();
+			state = STATE_RUN;
+		}
 		else if (key == 'N' || key == 'n')
 			state = STATE_CLIENT;
 	}
@@ -611,7 +646,7 @@ void cGame::Render()
 	Camera.Update(&Terrain, &Lava, Player.GetX(), Player.GetY(), Player.GetZ());
 	ang = fmod(ang+2,360);
 
-	Coord playerPos; playerPos.x = Player.GetX(); playerPos.y = Player.GetY(); playerPos.z = Player.GetZ();
+	 playerPos.x = Player.GetX(); playerPos.y = Player.GetY(); playerPos.z = Player.GetZ();
 
 	//draw scene(terrain + lava + skybox)
 	Scene.Draw(&Data,&Terrain,&Lava,&Shader,playerPos);
@@ -670,6 +705,7 @@ void cGame::Render()
 	{
 		//draw player
 		Player.Draw(&Data,&Camera,&Lava,&Shader);
+		Player2.Draw(&Data, &Camera, &Lava, &Shader);
 
 		//draw portal
 		Portal.Draw(&Data,portal_activated,&Shader,&Model);
@@ -681,6 +717,7 @@ void cGame::Render()
 	
 		//draw player
 		Player.Draw(&Data,&Camera,&Lava,&Shader);
+		Player2.Draw(&Data, &Camera, &Lava, &Shader);
 	}
 
 	//draw respawn points
@@ -689,19 +726,21 @@ void cGame::Render()
 		if(i==respawn_id) respawn_points[i].Draw(Data.GetID(IMG_CIRCLE_ON),true,&Shader);
 		else respawn_points[i].Draw(Data.GetID(IMG_CIRCLE_OFF),false,&Shader);
 	}
-	std::string msg;
 
+	std::string msg;
 	switch (state) {
 	case STATE_MENU: draw_start_menu();
 		break;
 	case STATE_MULTIPLAYER: msg = "Start a new Server? (Y/N)";
 		draw_transition_screen(msg);
 		break;
-	case STATE_CLIENT: msg = "Enter the IP address: ";
+	case STATE_CONNECT: msg = "Connecting to server \n";
 		msg.append(ipAddress);
 		draw_transition_screen(msg);
+		connectToServer();
+		state = STATE_RUN;
 		break;
-	case STATE_CONNECT: msg = "Connecting to server \n";
+	case STATE_CLIENT: msg = "Enter the IP address: ";
 		msg.append(ipAddress);
 		draw_transition_screen(msg);
 		break;
@@ -882,4 +921,253 @@ void draw_transition_screen(std::string connectMsg) {
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
 
+}
+
+int connectToServer()
+{
+	sockaddr_in ser;
+	sockaddr addr;
+	WSADATA data;
+	DWORD poll;
+	int res;
+	ser.sin_family = AF_INET;
+	ser.sin_port = htons(123);                    //Set the port
+	ser.sin_addr.s_addr = inet_addr(ipAddress);      //Set the address we want to connect to
+
+	memcpy(&addr, &ser, sizeof(SOCKADDR_IN));
+
+	res = WSAStartup(MAKEWORD(1, 1), &data);      //Start Winsock
+	std::cout << "\n\nWSAStartup"
+		<< "\nVersion: " << data.wVersion
+		<< "\nDescription: " << data.szDescription
+		<< "\nStatus: " << data.szSystemStatus;
+	std::cout << "\n";
+	if (res != 0)
+		s_cl("WSAStarup failed", WSAGetLastError());
+
+	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);       //Create the socket
+	if (sock == INVALID_SOCKET)
+		s_cl("Invalid Socket ", WSAGetLastError());
+	else if (sock == SOCKET_ERROR)
+		s_cl("Socket Error)", WSAGetLastError());
+	else
+		std::cout << "Socket Established\n";
+
+	res = connect(sock, &addr, sizeof(addr));               //Connect to the server
+	if (res != 0)
+	{
+		s_cl("SERVER UNAVAILABLE", res);
+		exit(0);
+	}
+	else
+	{
+		std::cout << "\nConnected to Server: ";
+		memcpy(&ser, &addr, sizeof(SOCKADDR));
+	}
+
+	CreateThread(NULL, 0, receive_cmd_client, (LPVOID)sock, 0, &poll);
+}
+
+DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
+
+	char RecvdData[100] = "";
+	int ret, res;
+	char buf[100];
+	SOCKET current_server = (SOCKET)lpParam;
+	std::cout << "Client Thread Created\n";
+
+	while (true)
+	{
+		strcpy(buf, "");
+		//std::cout << "\nEnter message to send ->\n";
+		//fgets(buf, sizeof(buf), stdin);
+		sprintf(buf, "%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+
+		//Sleep(5);
+		res = send(current_server, buf, sizeof(buf), 0);
+
+		if (res == 0)
+		{
+			//0==other side terminated conn
+			printf("\nSERVER terminated connection\n");
+			//Sleep(40);
+			closesocket(current_server);
+			//closesocket(client);
+			//client = 0;
+			break;
+		}
+		else if (res == SOCKET_ERROR)
+		{
+			//-1 == send error
+			printf("Socket error,,,,didnt send\n");
+			//Sleep(40);
+			s_handle(res);
+			break;
+		}
+		
+		ret = recv(current_server, RecvdData, sizeof(RecvdData), 0);
+		if (ret > 0)
+		{
+			std::cout << "From Server\n" << RecvdData;
+			char * token = strtok(RecvdData, ",");
+			float newPos[3];
+			int i = 0;
+			/* walk through other tokens */
+			while (token != NULL) {
+				newPos[i] = atof(token);
+				token = strtok(NULL, ",");
+				i++;
+			}
+			playerPos_recv.x = newPos[0];
+			playerPos_recv.y = newPos[1];
+			playerPos_recv.z = newPos[2];
+		}
+		strcpy(RecvdData, "");
+		strcpy(buf, "");
+	}
+	
+	return 1;
+}
+
+void s_handle(int s)
+{
+	if (sock)
+		closesocket(sock);
+	if (client)
+		closesocket(client);
+	WSACleanup();
+	//Sleep(1000);
+	std::cout << "EXIT SIGNAL :" << s;
+	//exit(0);
+}
+
+void s_cl(char *a, int x)
+{
+	std::cout << a;
+	s_handle(x + 1000);
+}
+
+void startServer()
+{
+	int i = 0;
+	printf("Starting up multi-threaded TCP server\r\n");
+
+	// our masterSocket(socket that listens for connections)
+	SOCKET sock;
+
+	// for our thread
+	DWORD thread;
+
+	WSADATA wsaData;
+	sockaddr_in server;
+
+	// start winsock
+	int ret = WSAStartup(0x101, &wsaData); // use highest version of winsock avalible
+
+	if (ret != 0)
+	{
+		printf("server didnt startup\n");
+		exit(0);
+	}
+
+	// fill in winsock struct ... 
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(123); // listen on telnet port 23
+
+	// create our socket
+	sock = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (sock == INVALID_SOCKET)
+	{
+		printf("invalid socket\n");
+		exit(0);
+	}
+
+	// bind our socket to a port(port 123) 
+	if (bind(sock, (sockaddr*)&server, sizeof(server)) != 0)
+	{
+		printf("binding error\n");
+		exit(0);
+	}
+
+	// listen for a connection  
+	if (listen(sock, 5) != 0)
+	{
+		printf("listen error\n");
+		exit(0);
+	}
+	printf("waiting for client to connect\n");
+	// socket that we snedzrecv data on
+	SOCKET client;
+
+	sockaddr_in from;
+	int fromlen = sizeof(from);
+
+	// loop forever 
+
+	// accept connections
+	client = accept(sock, (struct sockaddr*)&from, &fromlen);
+	printf("Client connected\r\n"); 
+
+	CreateThread(NULL, 0, receive_cmd_server, (LPVOID)client, 0, &thread);
+
+}
+
+DWORD WINAPI receive_cmd_server(LPVOID lpParam)
+{
+	printf("Server thread created\r\n");
+
+	// set our socket to the socket passed in as a parameter   
+	SOCKET current_client = (SOCKET)lpParam;
+
+	// buffer to hold our recived data
+	char buf[100];
+	// buffer to hold our sent data
+	char sendData[100];
+	// for error checking 
+	int res;
+
+	// our recv loop
+	while (true)
+	{
+		res = recv(current_client, buf, sizeof(buf), 0); // recv cmds
+
+														 //Sleep(10);
+
+		if (res == 0)
+		{
+			MessageBox(0, "error", "error", MB_OK);
+			closesocket(current_client);
+			ExitThread(0);
+		}
+		else {
+			std::cout << "From Client: " << buf;
+			std::cout << "\n";
+			
+			char * token = strtok(buf, ",");
+			float newPos[3];
+			int i = 0;
+			/* walk through other tokens */
+			while (token != NULL) {
+				newPos[i] = atof(token);
+				token = strtok(NULL, ",");
+				i++;
+			}
+			playerPos_recv.x = newPos[0];
+			playerPos_recv.y = newPos[1];
+			playerPos_recv.z = newPos[2];
+
+			strcpy(buf, "");
+		}
+				
+		sprintf(sendData, "%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+		//strcpy(sendData, "Invalid cmd\n");
+		Sleep(10);
+		send(current_client, sendData, sizeof(sendData), 0);
+
+		// clear buffers
+		strcpy(sendData, "");
+		strcpy(buf, "");
+	}
 }

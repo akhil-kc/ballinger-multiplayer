@@ -1,5 +1,5 @@
-Author: Jonathan Gonzalez Cortes
-
+Original Author: Jonathan Gonzalez Cortes
+New Authors: Akhil Kumar and Arpita Kushwaha
 This is a demo for a single player skill game.
 
 Goals:
