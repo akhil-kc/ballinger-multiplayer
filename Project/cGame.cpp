@@ -766,7 +766,6 @@ void draw_start_menu()
 	glLoadIdentity();
 	gluOrtho2D(-50, 50, -50, 50);
 
-
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 	glDisable(GL_CULL_FACE);
@@ -1041,7 +1040,6 @@ void s_handle(int s)
 	std::cout << "EXIT SIGNAL :" << s;
 	//exit(0);
 }
-
 
 void s_cl(char *a, int x)
 {
