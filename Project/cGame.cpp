@@ -40,6 +40,9 @@ int ipSize = 0;
 float mx, my, mz;
 Coord playerPos;
 Coord playerPos_recv;
+int pickedKeyId = -1;
+bool isChat = false;
+std::string chatMsg;
 bool cGame::Init(int lvl)
 {
 	bool res = true;
@@ -163,7 +166,7 @@ bool cGame::Loop()
 	int t1,t2;
 	t1 = glutGet(GLUT_ELAPSED_TIME);
 	
-	Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);
+	//Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);
     if(state == STATE_LIVELOSS)
 	{
 		Render();
@@ -425,7 +428,7 @@ bool cGame::Process()
 			float initial_z = Player.GetZ();
 			Physics(Player);
 
-			//comprueba si el player muere
+			//check if the player dies
 			if (Player.GetY() <= Lava.GetHeight() + RADIUS)
 			{
 				Player.SetY(Lava.GetHeight() + RADIUS);
@@ -438,7 +441,7 @@ bool cGame::Process()
 			Coord P; P.x = Player.GetX(); P.y = Player.GetY(); P.z = Player.GetZ();
 			float r = RADIUS;
 
-			//comprueba si el player entra en algun Respawn Point
+			//Check if the player enters any Respawn Point
 			float cr = CIRCLE_RADIUS, ah = AURA_HEIGHT;
 			for (unsigned int i = 0; i < respawn_points.size(); i++)
 			{
@@ -450,7 +453,7 @@ bool cGame::Process()
 				}
 			}
 
-			//comprueba si el player recoge alguna llave
+			//check if the player picks up a key
 			if (pickedkey_id == -1)
 			{
 				for (unsigned int i = 0; i < target_keys.size(); i++)
@@ -467,7 +470,7 @@ bool cGame::Process()
 				}
 			}
 
-			//comprueba si el player llega con una llave a su respectiva columna
+			//check if the player arrives with a key to their respective column
 			if (pickedkey_id != -1)
 			{
 				if (columns[pickedkey_id].InsideGatheringArea(P.x, P.y, P.z))
@@ -488,7 +491,7 @@ bool cGame::Process()
 				}
 			}
 
-			//comprueba si el player atraviesa el portal estando activado
+			//check if the player goes through the portal while activated
 			if (portal_activated)
 			{
 				if (Portal.InsidePortal(P.x, P.y, P.z, RADIUS))
@@ -499,8 +502,13 @@ bool cGame::Process()
 			}
 		}
 
-		//limpio buffer de sonidos
+		//clean sound buffer
 		Sound.Update();
+	}
+	if (isChat == TRUE)
+	{
+		state = STATE_CHAT;
+		Render();
 	}
 	return res;
 }
@@ -647,7 +655,7 @@ void cGame::Render()
 	ang = fmod(ang+2,360);
 
 	 playerPos.x = Player.GetX(); playerPos.y = Player.GetY(); playerPos.z = Player.GetZ();
-
+	 pickedKeyId = pickedkey_id;
 	//draw scene(terrain + lava + skybox)
 	Scene.Draw(&Data,&Terrain,&Lava,&Shader,playerPos);
 	
@@ -743,6 +751,10 @@ void cGame::Render()
 	case STATE_CLIENT: msg = "Enter the IP address: ";
 		msg.append(ipAddress);
 		draw_transition_screen(msg);
+		break;
+	case STATE_CHAT: draw_transition_screen(chatMsg);
+		isChat = FALSE;
+		state = STATE_RUN;
 		break;
 	default: break;
 	}
@@ -973,19 +985,30 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 
 	char RecvdData[100] = "";
 	int ret, res;
-	char buf[100];
+	char sendPosition[100];
+	char sendKey[100];
+	char sendChat[100];
 	SOCKET current_server = (SOCKET)lpParam;
 	std::cout << "Client Thread Created\n";
 
 	while (true)
 	{
-		strcpy(buf, "");
-		//std::cout << "\nEnter message to send ->\n";
-		//fgets(buf, sizeof(buf), stdin);
-		sprintf(buf, "%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+		strcpy(sendPosition, "");
+		strcpy(sendChat, "");
+		strcpy(sendKey, "");
+		
+		sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+		Sleep(100);
+		res = send(current_server, sendPosition, sizeof(sendPosition), 0);
 
-		//Sleep(5);
-		res = send(current_server, buf, sizeof(buf), 0);
+		if (pickedKeyId != -1) {
+			sprintf(sendKey, "OP_KEY:%d", pickedKeyId);
+			Sleep(100);
+			res = send(current_server, sendKey, sizeof(sendKey), 0);
+		}
+		sprintf(sendChat, "OP_CHAT:Hi There from Client!");
+		Sleep(100);
+		res = send(current_server, sendChat, sizeof(sendChat), 0);
 
 		if (res == 0)
 		{
@@ -1006,25 +1029,43 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 			break;
 		}
 		
+		//Sleep(1000);
 		ret = recv(current_server, RecvdData, sizeof(RecvdData), 0);
 		if (ret > 0)
 		{
 			std::cout << "From Server\n" << RecvdData;
-			char * token = strtok(RecvdData, ",");
-			float newPos[3];
-			int i = 0;
-			/* walk through other tokens */
-			while (token != NULL) {
-				newPos[i] = atof(token);
-				token = strtok(NULL, ",");
-				i++;
+			
+			if (strstr(RecvdData, "OP_POSITION")) {
+				char * ret = strchr(RecvdData, ':');
+				char * token = strtok(ret+1, ",");
+				float newPos[3];
+				int i = 0;
+				/* walk through other tokens */
+				while (token != NULL) {
+					newPos[i] = atof(token);
+					token = strtok(NULL, ",");
+					i++;
+				}
+				playerPos_recv.x = newPos[0];
+				playerPos_recv.y = newPos[1];
+				playerPos_recv.z = newPos[2];
 			}
-			playerPos_recv.x = newPos[0];
-			playerPos_recv.y = newPos[1];
-			playerPos_recv.z = newPos[2];
+			if (strstr(RecvdData, "OP_KEY")) {
+				char * ret = strchr(RecvdData, ':');
+				printf("key is:%s\n", ret + 1);
+			}
+			if (strstr(RecvdData, "OP_CHAT")) {
+				char * ret = strchr(RecvdData, ':');
+				printf("chat is:%s\n", ret + 1);
+				chatMsg = ret + 1;
+				isChat = true;
+			}
+
 		}
 		strcpy(RecvdData, "");
-		strcpy(buf, "");
+		strcpy(sendChat, "");
+		strcpy(sendPosition, "");
+		strcpy(sendKey, "");
 	}
 	
 	return 1;
@@ -1111,10 +1152,11 @@ void startServer()
 	// accept connections
 	client = accept(sock, (struct sockaddr*)&from, &fromlen);
 	printf("Client connected\r\n"); 
-
+	
 	CreateThread(NULL, 0, receive_cmd_server, (LPVOID)client, 0, &thread);
 
 }
+
 
 DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 {
@@ -1126,17 +1168,19 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 	// buffer to hold our recived data
 	char buf[100];
 	// buffer to hold our sent data
-	char sendData[100];
+	char sendPosition[100];
+	char sendKey[100];
+	char sendEvent[100];
+	char sendChat[1024];
 	// for error checking 
 	int res;
 
 	// our recv loop
 	while (true)
 	{
+//		Sleep(1000);
 		res = recv(current_client, buf, sizeof(buf), 0); // recv cmds
-
-														 //Sleep(10);
-
+		
 		if (res == 0)
 		{
 			MessageBox(0, "error", "error", MB_OK);
@@ -1147,29 +1191,52 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 			std::cout << "From Client: " << buf;
 			std::cout << "\n";
 			
-			char * token = strtok(buf, ",");
-			float newPos[3];
-			int i = 0;
-			/* walk through other tokens */
-			while (token != NULL) {
-				newPos[i] = atof(token);
-				token = strtok(NULL, ",");
-				i++;
+			if (strstr(buf, "OP_POSITION")) {
+				char * ret = strchr(buf, ':');
+				char * token = strtok(ret + 1, ",");
+				float newPos[3];
+				int i = 0;
+				/* walk through other tokens */
+				while (token != NULL) {
+					newPos[i] = atof(token);
+					token = strtok(NULL, ",");
+					i++;
+				}
+				playerPos_recv.x = newPos[0];
+				playerPos_recv.y = newPos[1];
+				playerPos_recv.z = newPos[2];
 			}
-			playerPos_recv.x = newPos[0];
-			playerPos_recv.y = newPos[1];
-			playerPos_recv.z = newPos[2];
+			if (strstr(buf, "OP_KEY")) {
+				char * ret = strchr(buf, ':');
+				printf("key is:%s\n", ret + 1);
+			}
+			if (strstr(buf, "OP_CHAT")) {
+				char * ret = strchr(buf, ':');
+				printf("chat is:%s\n", ret + 1);
+				chatMsg = ret + 1;
+				isChat = TRUE;
+			}
 
 			strcpy(buf, "");
 		}
-				
-		sprintf(sendData, "%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
-		//strcpy(sendData, "Invalid cmd\n");
-		Sleep(10);
-		send(current_client, sendData, sizeof(sendData), 0);
+		
+		sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+		Sleep(100);
+		send(current_client, sendPosition, sizeof(sendPosition), 0);
 
+		if (pickedKeyId != -1) {
+			sprintf(sendKey, "OP_KEY:%d", pickedKeyId);
+			Sleep(100);
+			send(current_client, sendKey, sizeof(sendKey), 0);
+		}
+		sprintf(sendChat, "OP_CHAT:Hi There from Server!");
+		Sleep(100);
+		send(current_client, sendChat, sizeof(sendChat), 0);
+		
 		// clear buffers
-		strcpy(sendData, "");
+		strcpy(sendPosition, "");
+		strcpy(sendKey, "");
+		strcpy(sendChat, "");
 		strcpy(buf, "");
 	}
 }
