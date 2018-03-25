@@ -26,7 +26,9 @@
 
 void draw_start_menu();
 void draw_chat_window(std::string chatMsg);
+void draw_score(int score, int lives);
 void draw_transition_screen(std::string connectMsg);
+void draw_game_over();
 void startServer();
 void s_cl(char *a, int x);
 void s_handle(int s);
@@ -53,6 +55,8 @@ bool cGame::Init(int lvl)
 	time = ang = 0.0f;
 	noclipSpeedF = 1.0f; 
 	level = lvl;
+	score = 0;
+	lives = 3;
 	//state = STATE_RUN;
 	state = STATE_MENU;
 	respawn_id = 0;
@@ -287,7 +291,7 @@ void cGame::ReadMouseMotion(int x, int y)
         return;
     }
 
-	//la cantidad desplazada en pixeles
+	//the amount displaced in pixels
     int dx = x - SCREEN_WIDTH/2;
     int dy = y - SCREEN_HEIGHT/2;
 
@@ -316,8 +320,6 @@ void ResetViewport()
 
 //View4Display
 void cGame::View4Display() {
-
-//	glutSetWindow(cGame::sub_win);
 	glClearColor(0.0, 0.0, 0.0, 0.0);         // black background 
 	glMatrixMode(GL_PROJECTION);              // setup viewing projection 
 	glLoadIdentity();                           // start with identity matrix
@@ -379,8 +381,6 @@ bool cGame::Process()
 		}
 	}
 	else if (state == STATE_RUN && keys['c']) {
-			std::cout << "Pressed c";
-			prevState = state;
 			state = STATE_CHAT;
 			Render();
 	}
@@ -518,20 +518,23 @@ bool cGame::Process()
 			float initial_z = Player.GetZ();
 			Physics(Player);
 
-			//comprueba si el player muere
+			//check if player dies
 			if (Player.GetY() <= Lava.GetHeight() + RADIUS)
 			{
 				Player.SetY(Lava.GetHeight() + RADIUS);
 				Player.SetVel(0.0f, 0.0f, 0.0f);
 				pickedkey_id = -1;
+				lives--;
 				state = STATE_LIVELOSS;
 				Sound.Play(SOUND_SWISH);
+				if (lives <= 0)
+					state = STATE_GAME_OVER;
 			}
 
 			Coord P; P.x = Player.GetX(); P.y = Player.GetY(); P.z = Player.GetZ();
 			float r = RADIUS;
 
-			//comprueba si el player entra en algun Respawn Point
+			//Check if the player enters any Respawn Point
 			float cr = CIRCLE_RADIUS, ah = AURA_HEIGHT;
 			for (unsigned int i = 0; i < respawn_points.size(); i++)
 			{
@@ -543,7 +546,7 @@ bool cGame::Process()
 				}
 			}
 
-			//comprueba si el player recoge alguna llave
+			//check if the player picks up a key
 			if (pickedkey_id == -1)
 			{
 				for (unsigned int i = 0; i < target_keys.size(); i++)
@@ -560,13 +563,14 @@ bool cGame::Process()
 				}
 			}
 
-			//comprueba si el player llega con una llave a su respectiva columna
+			//check if the player arrives with a key to their respective column
 			if (pickedkey_id != -1)
 			{
 				if (columns[pickedkey_id].InsideGatheringArea(P.x, P.y, P.z))
 				{
 					Sound.Play(SOUND_UNLOCK);
 					Sound.Play(SOUND_ENERGYFLOW);
+					score += 100;
 					target_keys[pickedkey_id].Deploy();
 					pickedkey_id = -1;
 					if (respawn_id)
@@ -581,7 +585,7 @@ bool cGame::Process()
 				}
 			}
 
-			//comprueba si el player atraviesa el portal estando activado
+			//check if the player goes through the portal while activated
 			if (portal_activated)
 			{
 				if (Portal.InsidePortal(P.x, P.y, P.z, RADIUS))
@@ -592,7 +596,7 @@ bool cGame::Process()
 			}
 		}
 
-		//limpio buffer de sonidos
+		//clean sound buffer
 		Sound.Update();
 	}
 	return res;
@@ -605,7 +609,7 @@ void cGame::Physics(cBicho &object)
 	std::vector<Vector> cnormals = Terrain.GetCollisionNormals(center,RADIUS);
 	object.SetPos(center.x,center.y,center.z); //despues de GetCollisionNormals la posicion center sera una posicion valida sobre la superficie
 
-	//actualizo angulos de rotacion por movimiento
+	//update angles of rotation by movement
 	if(object.GetZ() != initialPos.z || object.GetX() != initialPos.x)
 	{
 		float yaw,pitch;
@@ -629,7 +633,7 @@ void cGame::Physics(cBicho &object)
 	else
 	{
 		Vector G,F,G1,F1,cNormal;
-		float rz,rx; //angulos de rotacion
+		float rz,rx; //rotation angles
 		float factor,N = 0.0f;
 
 		G.x = 0.0f; G.y = -GRAVITY; G.z = 0.0f;
@@ -646,7 +650,7 @@ void cGame::Physics(cBicho &object)
 			else if(cnormals[i].z >  0.0f) rx = PI/2 - atan(cnormals[i].y/cnormals[i].z);
 			else rx = -PI/2 - atan(cnormals[i].y/cnormals[i].z);
 
-			//Transformamos las fuerzas definidas en el sistema de coordenadas de OpenGL al sistema de coordenadas definido por cnormal(eje y) 
+			//transform the forces defined in the OpenGL coordinate system to the coordinate system defined by cnormal(y axis)
 			G1.x = cos(-rz)*G.x - sin(-rz)*G.y;
 			G1.y = cos(-rx)*sin(-rz)*G.x + cos(-rx)*cos(-rz)*G.y - sin(-rx)*G.z;
 			G1.z = sin(-rx)*sin(-rz)*G.x + sin(-rx)*cos(-rz)*G.y + cos(-rx)*G.z;
@@ -655,18 +659,18 @@ void cGame::Physics(cBicho &object)
 			F1.y = cos(-rx)*sin(-rz)*F.x + cos(-rx)*cos(-rz)*F.y - sin(-rx)*F.z;
 			F1.z = sin(-rx)*sin(-rz)*F.x + sin(-rx)*cos(-rz)*F.y + cos(-rx)*F.z;
 			
-			//consideramos la fuerza normal para un unico triangulo
+			//consider the normal force for a single triangle
 			float cN = 0.0f;
 			if (G1.y < 0.0f) {cN -= G1.y; G1.y = 0.0f;}
 			if (F1.y < 0.0f) {cN -= F1.y; F1.y = 0.0f;}
-			N += cN; //actualizo la fuerza normal global
+			N += cN; //update global normal force
 
-			//actualizo la fuerza de cnormal global
+			//update global cnormal force
 			cNormal.x += cnormals[i].x;
 			cNormal.y += cnormals[i].y;
 			cNormal.z += cnormals[i].z;
 
-			//consideramos la posible friccion
+			//consider the possible friction
 			if(cN > 0.0f && abs(F1.x) + abs(F1.z) > 0.0f)
 			{
 				factor = sqrt( ((FRICTION*cN)*(FRICTION*cN)) / (F1.x*F1.x + F1.z*F1.z) );
@@ -678,7 +682,7 @@ void cGame::Physics(cBicho &object)
 				else F1.z -= F1.z*factor;
 			}
 			
-			//volvemos a Transformar las fuerzas del sistema de coordenadas de cnormal(eje y) al sistema de coordenadas de OpenGL
+			//we return to Transform the forces of the cnormal coordinate system(y axis) to the OpenGL coordinate system
 			G.x = cos(rz)*G1.x - sin(rz)*cos(rx)*G1.y + sin(rz)*sin(rx)*G1.z;
 			G.y = sin(rz)*G1.x + cos(rz)*cos(rx)*G1.y - cos(rz)*sin(rx)*G1.z;
 			G.z = sin(rx)*G1.y + cos(rx)*G1.z;
@@ -701,7 +705,7 @@ void cGame::Physics(cBicho &object)
 		nextVY *= limitation_factor;
 		nextVZ *= limitation_factor;
 
-		//consideramos el rebote
+		//consider the rebound
 		if(N > GRAVITY*4) factor = sqrt( (N*N) / (cNormal.x*cNormal.x + cNormal.y*cNormal.y + cNormal.z*cNormal.z) );
 		else factor = 0.0f;
 
@@ -713,7 +717,7 @@ void cGame::Physics(cBicho &object)
 		if(bounceForce >= PLAYER_JUMP_SPEED) Sound.PlayBounce(1.0f);
 		else if(bounceForce/PLAYER_JUMP_SPEED > 0.2f) Sound.PlayBounce(bounceForce/PLAYER_JUMP_SPEED);
 
-		//actualizamos velocidad
+		//update speed
 		object.SetVel(nextVX, nextVY, nextVZ);
 	}
 }
@@ -741,18 +745,17 @@ void cGame::Render()
 
 	 playerPos.x = Player.GetX(); playerPos.y = Player.GetY(); playerPos.z = Player.GetZ();
 
-	//draw scene(terrain + lava + skybox)
 	Scene.Draw(&Data,&Terrain,&Lava,&Shader,playerPos);
 	
 	//draw keys
 	for(unsigned int i=0; i<target_keys.size(); i++)
 	{
 		//color dye
-		if(i==0) glColor3f(1.0f,0.0f,0.0f); //rojo
-		if(i==1) glColor3f(1.0f,1.0f,0.0f); //amarillo
-		if(i==2) glColor3f(0.0f,1.0f,0.0f); //verde
-		if(i==3) glColor3f(0.2f,0.2f,1.0f); //azul
-		if(i==4) glColor3f(1.0f,0.0f,1.0f); //violeta
+		if(i==0) glColor3f(1.0f,0.0f,0.0f); //Red
+		if(i==1) glColor3f(1.0f,1.0f,0.0f); //yellow
+		if(i==2) glColor3f(0.0f,1.0f,0.0f); //green
+		if(i==3) glColor3f(0.2f,0.2f,1.0f); //blue
+		if(i==4) glColor3f(1.0f,0.0f,1.0f); //violet
 
 		if(i==pickedkey_id) target_keys[i].DrawPicked(Player.GetX(),Player.GetY(),Player.GetZ(),Camera.GetYaw(),&Model,&Data,&Shader);
 		else if(target_keys[i].IsDeployed())
@@ -760,11 +763,11 @@ void cGame::Render()
 			target_keys[i].DrawDeployed(columns[i].GetHoleX(),columns[i].GetHoleY(),columns[i].GetHoleZ(),columns[i].GetYaw(),&Model,&Data,&Shader);
 			
 			//ray color
-			if(i==0) glColor4f(1.0f,0.0f,0.0f,0.4f); //rojo
-			if(i==1) glColor4f(1.0f,1.0f,0.0f,0.4f); //amarillo
-			if(i==2) glColor4f(0.0f,1.0f,0.0f,0.4f); //verde
-			if(i==3) glColor4f(0.2f,0.2f,1.0f,0.4f); //azul
-			if(i==4) glColor4f(1.0f,0.0f,1.0f,0.4f); //violeta
+			if(i==0) glColor4f(1.0f,0.0f,0.0f,0.4f); //red
+			if(i==1) glColor4f(1.0f,1.0f,0.0f,0.4f); //yellow
+			if(i==2) glColor4f(0.0f,1.0f,0.0f,0.4f); //green
+			if(i==3) glColor4f(0.2f,0.2f,1.0f,0.4f); //blue
+			if(i==4) glColor4f(1.0f,0.0f,1.0f,0.4f); //violet
 
 			float r = ENERGY_BALL_RADIUS/2.0f; //energy ray radius
 			int numrays = 6;
@@ -847,6 +850,12 @@ void cGame::Render()
 		break;
 	default: break;
 	}
+
+	if (state == STATE_GAME_OVER) {
+		draw_game_over();
+	}
+
+	draw_score(score, lives);
 
 	glutSwapBuffers();
 }
@@ -1069,8 +1078,8 @@ void draw_chat_window(std::string chatMsg)
 	glDepthMask(GL_TRUE);
 	glDepthFunc(GL_LEQUAL);
 	glDepthRange(0.0f, 1.0f);
-	//std::string connectMsg = "1234567891234567891234567891234567890000";
 	glLineWidth(4);
+
 	glPushMatrix();
 	glTranslatef(-37, 0, 0);
 	glScalef(0.025, 0.03, 0);
@@ -1085,6 +1094,123 @@ void draw_chat_window(std::string chatMsg)
 	glMatrixMode(GL_MODELVIEW);
 }
 
+void draw_score(int score, int lives)
+{
+	std::string scoreMsg = "Score: ";
+	std::string livesMsg = "Lives: ";
+	scoreMsg += std::to_string(score);
+	livesMsg += std::to_string(lives);
+
+	glDisable(GL_LIGHTING);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+
+	glOrtho(0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0.0, -1.0, 10.0);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glDisable(GL_CULL_FACE);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glColor3f(0.1, 0, 0.8);
+	glBegin(GL_QUADS);
+	glVertex2f(0.0, 0.0);
+	glVertex2f(120.0, 0.0);
+	glVertex2f(120.0, 80.0);
+	glVertex2f(0.0, 80.0);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(0.0, 0.0);
+	glVertex2f(120.0, 0.0);
+	glVertex2f(120.0, 80.0);
+	glVertex2f(0.0, 80.0);
+	glEnd();
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(0.0f, 1.0f);
+	glLineWidth(4);
+
+	glPushMatrix();
+	glTranslatef(0, 37, 0);
+	glScalef(0.15, -0.3, 0);
+	glColor3f(1, 0, 0);
+	draw_string(scoreMsg);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0, 67, 0);
+	glScalef(0.15, -0.3, 0);
+	glColor3f(1, 0, 0);
+	draw_string(livesMsg);
+	glPopMatrix();
+
+	glEnable(GL_LIGHTING);
+	//to enable 3D
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+}
+
+void draw_game_over()
+{
+	glDisable(GL_LIGHTING);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluOrtho2D(-50, 50, -50, 50);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glDisable(GL_CULL_FACE);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glColor3f(0.4, 0, 0.8);
+	glBegin(GL_QUADS);
+	glVertex2f(60.0f, 10.0f);
+	glVertex2f(60.0f, -10.0f);
+	glVertex2f(-60.0f, -10.0f);
+	glVertex2f(-60.0f, 10.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(60.0f, 10.0f);
+	glVertex2f(60.0f, -10.0f);
+	glVertex2f(-60.0f, -10.0f);
+	glVertex2f(-60.0f, 10.0f);
+	glEnd();
+
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(0.0f, 1.0f);
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-37, 0, 0);
+	glScalef(0.025, 0.03, 0);
+	glColor3f(1, 1, 1);
+	draw_string("Game Over");
+	glPopMatrix();
+
+	glEnable(GL_LIGHTING);
+	//to enable 3D
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+}
 int connectToServer()
 {
 	sockaddr_in ser;
@@ -1141,8 +1267,6 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 	while (true)
 	{
 		strcpy(buf, "");
-		//std::cout << "\nEnter message to send ->\n";
-		//fgets(buf, sizeof(buf), stdin);
 		sprintf(buf, "%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
 
 		//Sleep(5);
@@ -1154,8 +1278,6 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 			printf("\nSERVER terminated connection\n");
 			//Sleep(40);
 			closesocket(current_server);
-			//closesocket(client);
-			//client = 0;
 			break;
 		}
 		else if (res == SOCKET_ERROR)

@@ -22,7 +22,8 @@ enum{
 	STATE_CONNECT,
 	STATE_WAIT_CONNECT,
 	STATE_CLIENT,
-	STATE_CHAT
+	STATE_CHAT,
+	STATE_GAME_OVER
 };
 
 #define TOTAL_LEVELS	  1
@@ -61,9 +62,10 @@ public:
 public:
 	unsigned char keys[256];
 	bool mouse_left_down,mouse_right_down;
-	int level,state,respawn_id,pickedkey_id,prevState;
+	int level,state,respawn_id,pickedkey_id;
 	bool noclip,portal_activated;
 	float time,ang, noclipSpeedF;
+	int score, lives;
 	std::vector<cRespawnPoint> respawn_points;
 	std::vector<cKey> target_keys;
 	std::vector<cColumn> columns;
