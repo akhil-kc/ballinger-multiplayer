@@ -25,6 +25,7 @@
 #include "cGame.h"
 
 void draw_start_menu();
+void draw_chat_window(std::string chatMsg);
 void draw_transition_screen(std::string connectMsg);
 void startServer();
 void s_cl(char *a, int x);
@@ -36,10 +37,14 @@ cGame::cGame(void) {}
 cGame::~cGame(void){}
 SOCKET sock, client;
 char ipAddress[100];
+char chatBuffer[1024];
 int ipSize = 0;
+int chatSize = 0;
 float mx, my, mz;
 Coord playerPos;
 Coord playerPos_recv;
+int cGame::main_win = 0;
+int cGame::sub_win = 0;
 bool cGame::Init(int lvl)
 {
 	bool res = true;
@@ -167,6 +172,9 @@ bool cGame::Loop()
     if(state == STATE_LIVELOSS)
 	{
 		Render();
+		glutSetWindow(cGame::sub_win);
+		View4Display();
+		glutSetWindow(cGame::main_win);
 		Player.SetPos(respawn_points[respawn_id].GetX(),respawn_points[respawn_id].GetY()+RADIUS,respawn_points[respawn_id].GetZ());
 		state = STATE_RUN;
 	}
@@ -176,7 +184,12 @@ bool cGame::Loop()
 	}
 	else {
 		res = Process();
-		if (res) Render();
+		if (res) {
+			Render();
+			glutSetWindow(cGame::sub_win);
+			View4Display();
+			glutSetWindow(cGame::main_win);
+		}
 	}
 
 	do { t2 = glutGet(GLUT_ELAPSED_TIME);
@@ -193,12 +206,12 @@ void cGame::ReadKeyboard(unsigned char key, int x, int y, bool press)
 {
 	if (state == STATE_MULTIPLAYER) {
 		if ((key == 'Y' || key == 'y') && !press) {
-			startServer();
-			state = STATE_RUN;
+			state = STATE_WAIT_CONNECT;
 		}
 		else if (key == 'N' || key == 'n')
 			state = STATE_CLIENT;
 	}
+
 	if (state == STATE_CLIENT) {
 		if (key == 13)
 			state = STATE_CONNECT;
@@ -208,8 +221,29 @@ void cGame::ReadKeyboard(unsigned char key, int x, int y, bool press)
 		}
 		return;
 	}
+
+	if (state == STATE_CHAT) {
+		std::cout << "In here";
+		if (key == 13) {
+			state = STATE_RUN;
+			for (int i = 0 ; i< chatSize; i++)
+				chatBuffer[i] = 0;
+			chatSize = 0;
+			//memset(chatBuffer, 0, sizeof(chatBuffer));
+			keys['c'] = false;
+			Render();
+			return;
+		}
+		else if (press) {
+			chatBuffer[chatSize] = key;
+			chatSize++;
+		}
+		return;
+	}
+
 	if(key >= 'A' && key <= 'Z') key += 32;
 	keys[key] = press;
+
 }
 
 void cGame::ReadSpecialKeyboard(unsigned char key, int x, int y, bool press)
@@ -271,6 +305,54 @@ void cGame::ReadMouseMotion(int x, int y)
     just_warped = true;
 }
 
+void ResetViewport()
+{
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(-2.0, 2.0, -2.0, 2.0, 0.5, 5.0);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+}
+
+//View4Display
+void cGame::View4Display() {
+
+//	glutSetWindow(cGame::sub_win);
+	glClearColor(0.0, 0.0, 0.0, 0.0);         // black background 
+	glMatrixMode(GL_PROJECTION);              // setup viewing projection 
+	glLoadIdentity();                           // start with identity matrix
+	glLineWidth(2.5);
+	glOrtho(0.0, 10.0, 0.0, 10.0, -1.0, 1.0);   // setup a 10x10x2 viewing world
+	glClear(GL_COLOR_BUFFER_BIT);
+	glBegin(GL_LINE);
+
+	glColor3f(1.0, 0.0, 0.0);
+	glVertex3f(0.0, 0.0, 0.0);
+	glVertex3f(10.0, 0.0, 0.0);
+
+	glEnd();
+	glFlush();
+	glutSwapBuffers();
+	//viewport rest;
+	/*ResetViewport();
+
+	glClear(GL_COLOR_BUFFER_BIT);
+	glColor3f(1.0, 1.0, 1.0);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluPerspective(30, 1.0, 3.0, 50.0);
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	gluLookAt(5.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+	Render();
+	glPopMatrix();
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glFlush();
+	glutSwapBuffers();*/
+}
+
 //Process
 bool cGame::Process()
 {
@@ -283,15 +365,26 @@ bool cGame::Process()
 		if (keys['s']) {
 			state = STATE_RUN;
 			Render();
+			glutSetWindow(cGame::sub_win);
+			View4Display();
+			glutSetWindow(cGame::main_win);
 			//	return;
 		}
 		else if (keys['m']) {
 			state = STATE_MULTIPLAYER;
 			Render();
+			glutSetWindow(cGame::sub_win);
+			View4Display();
+			glutSetWindow(cGame::main_win);
 		}
 	}
+	else if (state == STATE_RUN && keys['c']) {
+			std::cout << "Pressed c";
+			prevState = state;
+			state = STATE_CHAT;
+			Render();
+	}
 	else {
-
 
 		float vx, vy, vz;
 		Camera.GetDirectionVector(vx, vy, vz);
@@ -744,6 +837,14 @@ void cGame::Render()
 		msg.append(ipAddress);
 		draw_transition_screen(msg);
 		break;
+	case STATE_WAIT_CONNECT: draw_transition_screen("Waiting for Client Connection");
+		Sleep(3000);
+		startServer();
+		state = STATE_RUN;
+		break;
+	case STATE_CHAT: 
+		draw_chat_window(chatBuffer);
+		break;
 	default: break;
 	}
 
@@ -921,6 +1022,67 @@ void draw_transition_screen(std::string connectMsg) {
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
 
+}
+
+void draw_chat_window(std::string chatMsg)
+{
+	glDisable(GL_LIGHTING);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluOrtho2D(-50, 50, -50, 50);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glDisable(GL_CULL_FACE);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glColor3f(0.4, 0, 0.8);
+	glBegin(GL_QUADS);
+	glVertex2f(40.0f, 20.0f);
+	glVertex2f(40.0f, -20.0f);
+	glVertex2f(-40.0f, -20.0f);
+	glVertex2f(-40.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(3);
+	glColor3f(0.3, 0.7, 0.5);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(40.0f, 20.0f);
+	glVertex2f(40.0f, -20.0f);
+	glVertex2f(-40.0f, -20.0f);
+	glVertex2f(-40.0f, 20.0f);
+	glEnd();
+
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-25, 25, 0);
+	glScalef(0.03, 0.03, 0);
+	glColor3f(1, 0, 0.5);
+	draw_string("Type Message and press Enter");
+	glPopMatrix();
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(0.0f, 1.0f);
+	//std::string connectMsg = "1234567891234567891234567891234567890000";
+	glLineWidth(4);
+	glPushMatrix();
+	glTranslatef(-37, 0, 0);
+	glScalef(0.025, 0.03, 0);
+	glColor3f(1, 1, 1);
+	draw_string(chatMsg);
+	glPopMatrix();
+
+	glEnable(GL_LIGHTING);
+	//to enable 3D
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
 }
 
 int connectToServer()

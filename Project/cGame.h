@@ -20,7 +20,9 @@ enum{
 	STATE_MENU,
 	STATE_MULTIPLAYER,
 	STATE_CONNECT,
-	STATE_CLIENT
+	STATE_WAIT_CONNECT,
+	STATE_CLIENT,
+	STATE_CHAT
 };
 
 #define TOTAL_LEVELS	  1
@@ -54,11 +56,12 @@ public:
 	//Output
 	void Reshape(int w, int h);
 	void Render();
+	void View4Display();
 
 public:
 	unsigned char keys[256];
 	bool mouse_left_down,mouse_right_down;
-	int level,state,respawn_id,pickedkey_id;
+	int level,state,respawn_id,pickedkey_id,prevState;
 	bool noclip,portal_activated;
 	float time,ang, noclipSpeedF;
 	std::vector<cRespawnPoint> respawn_points;
@@ -75,6 +78,7 @@ public:
 	cModel Model;
 	cTerrain Terrain;
 	cLava Lava;
+	static int main_win, sub_win;
 
 	void Physics(cBicho &object);
 	

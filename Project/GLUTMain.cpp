@@ -11,6 +11,7 @@
 #include <iostream>
 #include <fstream>
 
+
 // Need to link with Ws2_32.lib
 #pragma comment (lib, "Ws2_32.lib")
 // #pragma comment (lib, "Mswsock.lib")
@@ -26,6 +27,7 @@ int visits = 0; /*the number client connect*/
 //#pragma comment(linker, "/subsystem:\"windows\" /entry:\"mainCRTStartup\"")
 
 cGame Game;
+int main_win, sub_win;
 
 void AppReshape(int w, int h)
 {
@@ -64,13 +66,19 @@ void AppIdle()
 	if(!Game.Loop()) exit(0);
 }
 
+//View4Display
+void ViewDisplay() {
+	Game.View4Display();
+}
+
+
 void main(int argc, char** argv)
 {
+	
 	int res_x,res_y,pos_x,pos_y;
 	int x;
 	bool client_flag = false;
 	bool server_flag = false;
-	std::cout << "In main function";
 		
 	//GLUT initialization
 	glutInit(&argc, argv);
@@ -86,7 +94,8 @@ void main(int argc, char** argv)
 
 	glutInitWindowPosition(pos_x, pos_y);
 	glutInitWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-	glutCreateWindow("The Ballenger Server");
+	cGame::main_win = glutCreateWindow("The Ballenger Server");
+
 
 	//glutFullScreen();
 
@@ -107,6 +116,11 @@ void main(int argc, char** argv)
 	glutMotionFunc(AppMouseMotion);
 	glutPassiveMotionFunc(AppMouseMotion);
 	glutIdleFunc(AppIdle);
+
+	cGame::sub_win = glutCreateSubWindow(cGame::main_win, 400, 600, 256, 256);
+	glutDisplayFunc(ViewDisplay);
+
+	glutSetWindow(cGame::main_win);
 
 	//GLEW initialization
 	GLint GlewInitResult = glewInit();
