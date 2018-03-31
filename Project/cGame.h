@@ -68,6 +68,7 @@ public:
 	int score, lives;
 	std::vector<cRespawnPoint> respawn_points;
 	std::vector<cKey> target_keys;
+	std::vector<cKey> white_keys;
 	std::vector<cColumn> columns;
 	cPortal Portal;
 	cScene Scene;
