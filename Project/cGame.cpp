@@ -50,6 +50,7 @@ int cGame::sub_win = 0;
 
 int sendKeyId = -1, recvKeyId = -1;
 bool isSendChat = false, isRecvChat = false, isMultiplayer = false;
+bool sendKeyDeployed = false, sendKeyLost = false, recvKeyDeployed = false, recvKeyLost = false;
 std::string sendChatMsg;
 std::string recvChatMsg;
 
@@ -165,6 +166,8 @@ bool cGame::Init(int lvl)
 
 	//Player initialization
 	Player.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2)+RADIUS,TERRAIN_SIZE/2);
+	if (isMultiplayer)
+		Player2.SetPos(TERRAIN_SIZE / 2, Terrain.GetHeight(TERRAIN_SIZE / 2, TERRAIN_SIZE / 2) + RADIUS, TERRAIN_SIZE / 2);
 
 	//Portal initialization
 	Portal.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2+32),TERRAIN_SIZE/2+32);
@@ -199,9 +202,6 @@ bool cGame::Loop()
 	int t1,t2;
 	t1 = glutGet(GLUT_ELAPSED_TIME);
 	
-	if (isMultiplayer)
-		Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);
-
     if(state == STATE_LIVELOSS)
 	{
 		Render();
@@ -375,9 +375,18 @@ void cGame::View4Display() {
 //Process
 bool cGame::Process()
 {
-	bool res=true;
+	bool res = true;
 	//Process Input
-	if(keys[27])	res=false;
+	if (keys[27])	res = false;
+
+	if (recvKeyDeployed && (recvKeyId > 0 )) {
+		target_keys[recvKeyId].Deploy();
+		recvKeyDeployed = false;
+		recvKeyId = -1;
+	}
+	if (recvKeyLost) {
+		recvKeyId = -1;
+	}
 
 	if (state == STATE_MENU) {
 		if (keys['s']) {
@@ -541,6 +550,7 @@ bool cGame::Process()
 				Player.SetY(Lava.GetHeight() + RADIUS);
 				Player.SetVel(0.0f, 0.0f, 0.0f);
 				pickedkey_id = -1;
+				sendKeyLost = true;
 				sendKeyId = -1;
 				if (lives != 0)
 					lives--;
@@ -607,6 +617,7 @@ bool cGame::Process()
 					Sound.Play(SOUND_UNLOCK);
 					Sound.Play(SOUND_ENERGYFLOW);
 					score += 100;
+					sendKeyDeployed = true;
 					target_keys[pickedkey_id].Deploy();
 					pickedkey_id = sendKeyId = -1;
 					if (respawn_id)
@@ -774,6 +785,9 @@ void cGame::Render()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 
+	if ((state == STATE_RUN) && isMultiplayer)
+		Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);
+	
 	//updates
 	if(state != STATE_LIVELOSS) Lava.Update();
 	Camera.Update(&Terrain, &Lava, Player.GetX(), Player.GetY(), Player.GetZ());
@@ -794,7 +808,7 @@ void cGame::Render()
 		if(i==4) glColor3f(1.0f,0.0f,1.0f); //violet
 
 		if(i==pickedkey_id) target_keys[i].DrawPicked(Player.GetX(),Player.GetY(),Player.GetZ(),Camera.GetYaw(),&Model,&Data,&Shader);
-		else if (isMultiplayer && (i = recvKeyId))
+		else if (isMultiplayer && (i == recvKeyId))
 			target_keys[i].DrawPicked(Player2.GetX(), Player2.GetY(), Player2.GetZ(), Camera.GetYaw(), &Model, &Data, &Shader);
 		else if(target_keys[i].IsDeployed())
 		{
@@ -847,7 +861,7 @@ void cGame::Render()
 		//draw player
 		Player.Draw(&Data,&Camera,&Lava,&Shader);
 
-		if(isMultiplayer)
+		//if(isMultiplayer)
 			Player2.Draw(&Data, &Camera, &Lava, &Shader);
 
 		//draw portal
@@ -861,7 +875,7 @@ void cGame::Render()
 		//draw player
 		Player.Draw(&Data,&Camera,&Lava,&Shader);
 
-		if(isMultiplayer)
+		//if(isMultiplayer)
 			Player2.Draw(&Data, &Camera, &Lava, &Shader);
 	}
 
@@ -1321,47 +1335,13 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 	char sendPosition[100];
 	char sendKey[100];
 	char sendChat[100];
+	char keyDeployed[100];
+	char keyLost[100];
 	SOCKET current_server = (SOCKET)lpParam;
 	std::cout << "Client Thread Created\n";
 
 	while (true)
 	{
-		strcpy(sendPosition, "");
-		strcpy(sendChat, "");
-		strcpy(sendKey, "");
-
-		sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
-		Sleep(100);
-		res = send(current_server, sendPosition, sizeof(sendPosition), 0);
-
-		if (sendKeyId != -1) {
-			sprintf(sendKey, "OP_KEY:%d", sendKeyId);
-			Sleep(100);
-			res = send(current_server, sendKey, sizeof(sendKey), 0);
-		}
-		if (isSendChat) {
-			sprintf(sendChat, "OP_CHAT:%s", sendChatMsg.c_str());
-			std::cout << "\n Sending chat msg --" << sendChat;
-			Sleep(100);
-			res = send(current_server, sendChat, sizeof(sendChat), 0);
-			isSendChat = false;
-		}
-
-		if (res == 0)
-		{
-			printf("\nSERVER terminated connection\n");
-			closesocket(current_server);
-			break;
-		}
-		else if (res == SOCKET_ERROR)
-		{
-			//-1 == send error
-			printf("Socket error,,,,didnt send\n");
-			//Sleep(40);
-			s_handle(res);
-			break;
-		}
-
 		//Sleep(1000);
 		ret = recv(current_server, RecvdData, sizeof(RecvdData), 0);
 		if (ret > 0)
@@ -1394,14 +1374,68 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 				recvChatMsg = std::string(ret);
 				isRecvChat = true;
 			}
+			if (strstr(RecvdData, "OP_KEYDEPLOY")) {
+				recvKeyDeployed = true;
+			}
+			if (strstr(RecvdData, "OP_KEYLOST")) {
+				recvKeyLost = true;
+				recvKeyId = -1;
+			}
 
 		}
 		strcpy(RecvdData, "");
 		strcpy(sendChat, "");
 		strcpy(sendPosition, "");
 		strcpy(sendKey, "");
-	}
 
+		strcpy(sendPosition, "");
+		strcpy(sendChat, "");
+		strcpy(sendKey, "");
+
+		sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+		Sleep(100);
+		res = send(current_server, sendPosition, sizeof(sendPosition), 0);
+
+		if (sendKeyDeployed) {
+			sprintf(keyDeployed, "OP_KEYDEPLOY");
+			sendKeyDeployed = false;
+		}
+		if (sendKeyLost) {
+			sprintf(keyLost, "OP_KEYLOST");
+			sendKeyLost = false;
+		}
+
+		if (sendKeyId != -1) {
+			sprintf(sendKey, "OP_KEY:%d", sendKeyId);
+			Sleep(100);
+			res = send(current_server, sendKey, sizeof(sendKey), 0);
+		}
+		if (isSendChat) {
+			sprintf(sendChat, "OP_CHAT:%s", sendChatMsg.c_str());
+			std::cout << "\n Sending chat msg --" << sendChat;
+			Sleep(100);
+			res = send(current_server, sendChat, sizeof(sendChat), 0);
+			isSendChat = false;
+		}
+
+
+		if (res == 0)
+		{
+			printf("\nSERVER terminated connection\n");
+			closesocket(current_server);
+			break;
+		}
+		else if (res == SOCKET_ERROR)
+		{
+			//-1 == send error
+			printf("Socket error,,,,didnt send\n");
+			//Sleep(40);
+			s_handle(res);
+			break;
+		}
+
+
+	}
 	return 1;
 }
 
@@ -1504,6 +1538,8 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 	char sendKey[100];
 	char sendEvent[100];
 	char sendChat[1024];
+	char keyDeployed[100];
+	char keyLost[100];
 	// for error checking 
 	int res;
 
@@ -1550,6 +1586,13 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 				std::cout << "\n Received chat :" << recvChatMsg;
 				isRecvChat = true;
 			}
+			if (strstr(buf, "OP_KEYDEPLOY")) {
+				recvKeyDeployed = true;
+			}
+			if (strstr(buf, "OP_KEYLOST")) {
+				recvKeyLost = true;
+				recvKeyId = -1;
+			}
 
 			strcpy(buf, "");
 		}
@@ -1558,6 +1601,15 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 		Sleep(100);
 		send(current_client, sendPosition, sizeof(sendPosition), 0);
 
+		if (sendKeyDeployed) {
+			sprintf(keyDeployed, "OP_KEYDEPLOY");
+			sendKeyDeployed = false;
+		}
+		if (sendKeyLost) {
+			sprintf(keyLost, "OP_KEYLOST");
+			sendKeyLost = false;
+		}
+
 		if (sendKeyId != -1) {
 			sprintf(sendKey, "OP_KEY:%d", sendKeyId);
 			Sleep(100);
@@ -1565,11 +1617,11 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 		}
 		if (isSendChat) {
 			sprintf(sendChat, "OP_CHAT:%s", sendChatMsg.c_str());
-			std::cout << "\n Sending chat msg --" << sendChat;
 			Sleep(100);
 			res = send(current_client, sendChat, sizeof(sendChat), 0);
 			isSendChat = false;
 		}
+
 		// clear buffers
 		strcpy(sendPosition, "");
 		strcpy(sendKey, "");
