@@ -75,7 +75,7 @@ public:
 	cData Data;
 	//Dino dino;
 	Dino Player;
-	//Dino Player2;
+	Dino Player2;
 	cCamera Camera;
 	cSound Sound;
 	cShader Shader;

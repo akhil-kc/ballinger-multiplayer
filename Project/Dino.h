@@ -28,12 +28,9 @@ class Dino : public cBicho
 {
 public:
 	Dino();
-	void draw(/*cTerrain *Terrain, cCamera *Camera*/);
+	void draw(cTerrain *Terrain, cCamera *Camera);
 	virtual ~Dino(void);
 	void SetFade(bool b);
-	// Set position, direction and phase (in walking)
-	//void setPosition(Vertex3 pos);
-	//void setDirection(Vector3 dir);
 	void setPhase(float phase); // phase is 0..1 of the walking cycle
 	void init();
 	void rotate(float angle);
@@ -63,8 +60,7 @@ private:
 	Model	_leg;
 
 	float		_phase;			// Phase of the walking cycle
-								//Vertex3		_position;
-								//Vector3		_direction;
+							
 	bool fade;
 
 };

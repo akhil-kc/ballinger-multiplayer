@@ -1,12 +1,3 @@
-/*
-(C) 2004 - 2008 Thomas Bleeker
-MadWizard.org
-
-Released under the BSD license with the exception of parts of the code
-not written by Thomas Bleeker (www.madwizard.org), which are marked in
-the source code. See license.txt for details.
-*/
-
 #include "Dino.h"
 #include "util.h"
 float fyaw = 0.0, fx = 0.0, fy = 0.0, fz = 0.0;
@@ -32,9 +23,6 @@ void Dino::init()
 
 	_phase = 0.0;
 	isJump = false;
-	//	isMove = 0;
-	//	_position = Vertex3(0, 0, 0);
-	//	_direction = Vector3(-1, 0, 1);
 }
 Dino::~Dino(void)
 {
@@ -47,27 +35,18 @@ void Dino::setAngle(float angle)
 {
 	_ang = angle;
 }
-void Dino::draw(/*cTerrain *Terrain, cCamera *Camera*/)
+void Dino::draw(cTerrain *Terrain, cCamera *Camera)
 {
-	//const float PI = 3.14159265358979324f;
 	glPushMatrix();
 	float x = GetX();
-	//float y = Terrain->GetHeight(GetX(), GetZ());
-	//printf("y pos in draw: %f\n", y);
-	/*if (isJump) {
-	y = GetY();
-	}
-	else {
-	y = Terrain->GetHeight(GetX(), GetZ());
-	}*/
-	float y = GetY();
+	float y = Terrain->GetHeight(GetX(), GetZ());
 	float z = GetZ();
 
 
-	//Camera->GetDirectionVector(fx, fy, fz);
+	Camera->GetDirectionVector(fx, fy, fz);
 	glTranslatef(x, y, z);
-	//float ang = rad2deg(atan2(-fz, fx));
-	//glRotatef(ang, 0.0, 1.0, 0.0);
+	float ang = rad2deg(atan2(-fz, fx));
+	glRotatef(ang, 0.0, 1.0, 0.0);
 
 
 	// Move z-axis to the middle of the dino
@@ -78,11 +57,7 @@ void Dino::draw(/*cTerrain *Terrain, cCamera *Camera*/)
 	float   sinVal = sin(_phase * 2 * PI); // sine function
 	float	cosVal2 = cos((_phase + 0.5) * 2 * PI); // second cosine function
 
-													// Make the whole dino waggle a bit
-													//rotateAround(7.5, 0, 0, 0, 1, 0, cosVal * 10);
-													//rotateAround(0, 1.5, 0, 1, 0, 0, -sinVal * 10);
-
-													// Draw body and eyes at the right positions
+													
 	glPushMatrix();
 	glScalef(0.2f, 0.2f, 0.5f);
 	_body.draw();
@@ -193,15 +168,6 @@ float Dino::getLegHeight(float phase)
 	}
 	return up;
 }
-/*void Dino::setPosition(Vertex3 pos)
-{
-_position = pos;
-}
-
-void Dino::setDirection(Vector3 dir)
-{
-_direction = dir;
-}*/
 
 void Dino::setPhase(float phase)
 {

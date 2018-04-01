@@ -45,11 +45,12 @@ int chatSize = 0;
 float mx, my, mz;
 Coord playerPos;
 Coord playerPos_recv;
+float RADIUS = 0.0;
 int cGame::main_win = 0;
 int cGame::sub_win = 0;
-float RADIUS = 0.0;
+
 int sendKeyId = -1, recvKeyId = -1;
-bool isSendChat = false, isRecvChat = false, isMultiplayer = false;
+bool isSendChat = false, isRecvChat = false, isMultiplayer = true;
 bool sendKeyDeployed = false, sendKeyLost = false, recvKeyDeployed = false, recvKeyLost = false;
 std::string sendChatMsg;
 std::string recvChatMsg;
@@ -165,10 +166,10 @@ bool cGame::Init(int lvl)
 	columns.push_back(col);
 
 	//Player initialization
-	Player.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2)+RADIUS,TERRAIN_SIZE/2);
-	/*if (isMultiplayer)
-		Player2.SetPos(TERRAIN_SIZE / 2, Terrain.GetHeight(TERRAIN_SIZE / 2, TERRAIN_SIZE / 2) + RADIUS, TERRAIN_SIZE / 2);*/
-	
+	Player.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2),TERRAIN_SIZE/2);
+	if (isMultiplayer)
+		Player2.SetPos(TERRAIN_SIZE / 2, Terrain.GetHeight(TERRAIN_SIZE / 2, TERRAIN_SIZE / 2) + RADIUS, TERRAIN_SIZE / 2);
+
 	//Portal initialization
 	Portal.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2+32),TERRAIN_SIZE/2+32);
 
@@ -192,10 +193,11 @@ bool cGame::Init(int lvl)
 	respawn_points.push_back(rp);
 
 	Sound.Play(SOUND_AMBIENT);
-	
+
 	Player.init();
-	RADIUS = DINO_TEXTURE_BOX.dy() / 2;
+	Player2.init();
 	Player.getTimer().start();
+	RADIUS = DINO_TEXTURE_BOX.dy() / 2;
 	return res;
 }
 
@@ -208,9 +210,9 @@ bool cGame::Loop()
     if(state == STATE_LIVELOSS)
 	{
 		Render();
-		//glutSetWindow(cGame::sub_win);
-		//View4Display();
-		//glutSetWindow(cGame::main_win);
+		glutSetWindow(cGame::sub_win);
+		View4Display();
+		glutSetWindow(cGame::main_win);
 		Player.SetPos(respawn_points[respawn_id].GetX(),respawn_points[respawn_id].GetY()+RADIUS,respawn_points[respawn_id].GetZ());
 		state = STATE_RUN;
 	}
@@ -222,9 +224,9 @@ bool cGame::Loop()
 		res = Process();
 		if (res) {
 			Render();
-			//glutSetWindow(cGame::sub_win);
-			//View4Display();
-			//glutSetWindow(cGame::main_win);
+			glutSetWindow(cGame::sub_win);
+			View4Display();
+			glutSetWindow(cGame::main_win);
 		}
 	}
 
@@ -286,6 +288,11 @@ void cGame::ReadKeyboard(unsigned char key, int x, int y, bool press)
 	if(key >= 'A' && key <= 'Z') key += 32;
 	keys[key] = press;
 
+	if ((key == 's' || key == 'w' || key == 'a' || key == 'd') && press)
+		Player.isMove = true;
+	else if ((key == 's' || key == 'w' || key == 'a' || key == 'd') && !press)
+		Player.isMove = false;
+
 }
 
 void cGame::ReadSpecialKeyboard(unsigned char key, int x, int y, bool press)
@@ -336,10 +343,12 @@ void cGame::ReadMouseMotion(int x, int y)
     if(dx) {
         Camera.RotateYaw(CAMERA_SPEED*dx);
 		if(Camera.GetState() != STATE_TPS_FREE) Camera.SetLastYaw(Camera.GetYaw());
+		Player.SetYaw(Camera.GetYaw() * 57.2957795);
     }
 
     if(dy) {
         Camera.RotatePitch(-CAMERA_SPEED*dy);
+		Player.SetPitch(Camera.GetPitch() * 57.2957795);
     }
 
     glutWarpPointer(SCREEN_WIDTH/2, SCREEN_HEIGHT/2);
@@ -393,20 +402,21 @@ bool cGame::Process()
 
 	if (state == STATE_MENU) {
 		if (keys['s']) {
+			isMultiplayer = false;
 			state = STATE_RUN;
 			Render();
-			//glutSetWindow(cGame::sub_win);
-			//View4Display();
-			//glutSetWindow(cGame::main_win);
+			glutSetWindow(cGame::sub_win);
+			View4Display();
+			glutSetWindow(cGame::main_win);
 			//	return;
 		}
 		else if (keys['m']) {
-			isMultiplayer = true;
+		//	isMultiplayer = true;
 			state = STATE_MULTIPLAYER;
 			Render();
-			//glutSetWindow(cGame::sub_win);
-			//View4Display();
-			//glutSetWindow(cGame::main_win);
+			glutSetWindow(cGame::sub_win);
+			View4Display();
+			glutSetWindow(cGame::main_win);
 		}
 	}
 	else if (state == STATE_RUN && keys['c']) {
@@ -788,8 +798,8 @@ void cGame::Render()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 
-	/*if ((state == STATE_RUN) && isMultiplayer)
-		Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);*/
+	
+	Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);
 	
 	//updates
 	if(state != STATE_LIVELOSS) Lava.Update();
@@ -811,8 +821,8 @@ void cGame::Render()
 		if(i==4) glColor3f(1.0f,0.0f,1.0f); //violet
 
 		if(i==pickedkey_id) target_keys[i].DrawPicked(Player.GetX(),Player.GetY(),Player.GetZ(),Camera.GetYaw(),&Model,&Data,&Shader);
-		/*else if (isMultiplayer && (i == recvKeyId))
-			target_keys[i].DrawPicked(Player2.GetX(), Player2.GetY(), Player2.GetZ(), Camera.GetYaw(), &Model, &Data, &Shader);*/
+		else if (isMultiplayer && (i == recvKeyId))
+			target_keys[i].DrawPicked(Player2.GetX(), Player2.GetY(), Player2.GetZ(), Camera.GetYaw(), &Model, &Data, &Shader);
 		else if(target_keys[i].IsDeployed())
 		{
 			target_keys[i].DrawDeployed(columns[i].GetHoleX(),columns[i].GetHoleY(),columns[i].GetHoleZ(),columns[i].GetYaw(),&Model,&Data,&Shader);
@@ -864,9 +874,9 @@ void cGame::Render()
 		//draw player
 		//Player.Draw(&Data,&Camera,&Lava,&Shader);
 
-		//if(isMultiplayer)
-			//Player2.Draw(&Data, &Camera, &Lava, &Shader);
-		Player.draw();
+		if(isMultiplayer)
+			Player2.draw(&Terrain, &Camera);
+		Player.draw(&Terrain, &Camera);
 		//draw portal
 		Portal.Draw(&Data,portal_activated,&Shader,&Model);
 	}
@@ -875,11 +885,13 @@ void cGame::Render()
 		//draw portal
 		Portal.Draw(&Data,portal_activated,&Shader,&Model);
 		Player.setPhase(Player.getTimer().getTime());
+
+		Player.draw(&Terrain, &Camera);
 		//draw player
 		//Player.Draw(&Data,&Camera,&Lava,&Shader);
-		Player.draw();
-		//if(isMultiplayer)
-			//Player2.Draw(&Data, &Camera, &Lava, &Shader);
+
+		if(isMultiplayer)
+			Player2.draw(&Terrain, &Camera);
 	}
 
 	//draw respawn points
@@ -978,8 +990,6 @@ void draw_start_menu()
 	glColor3f(0.98, 0.98, 0.5);
 	draw_string("Dino Run Multiplayer");
 	glPopMatrix();
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 	glEnable(GL_DEPTH_TEST);
@@ -1081,8 +1091,6 @@ void draw_transition_screen(std::string connectMsg) {
 	glColor3f(0.98, 0.98, 0.5);
 	draw_string("Dino Run Multiplayer");
 	glPopMatrix();
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 	glEnable(GL_DEPTH_TEST);
@@ -1146,8 +1154,6 @@ void draw_chat_window(std::string chatMsg)
 		draw_string("Type Message and press Enter");
 
 	glPopMatrix();
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 	glEnable(GL_DEPTH_TEST);
@@ -1206,9 +1212,6 @@ void draw_score(int score, int lives)
 	glVertex2f(0.0, 80.0);
 	glEnd();
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 	glEnable(GL_DEPTH_TEST);
 	glDepthMask(GL_TRUE);
@@ -1230,6 +1233,7 @@ void draw_score(int score, int lives)
 	draw_string(livesMsg);
 	glPopMatrix();
 
+	glClearColor(0, 0, 0, 0);
 	glEnable(GL_LIGHTING);
 	//to enable 3D
 	glMatrixMode(GL_PROJECTION);
@@ -1345,66 +1349,22 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 
 	while (true)
 	{
-		//Sleep(1000);
-		ret = recv(current_server, RecvdData, sizeof(RecvdData), 0);
-		if (ret > 0)
-		{
-			std::cout << "\n From Server\n" << RecvdData;
-
-			if (strstr(RecvdData, "OP_POSITION")) {
-				char * ret = strchr(RecvdData, ':');
-				char * token = strtok(ret + 1, ",");
-				float newPos[3];
-				int i = 0;
-				/* walk through other tokens */
-				while (token != NULL) {
-					newPos[i] = atof(token);
-					token = strtok(NULL, ",");
-					i++;
-				}
-				playerPos_recv.x = newPos[0];
-				playerPos_recv.y = newPos[1];
-				playerPos_recv.z = newPos[2];
-			}
-			if (strstr(RecvdData, "OP_KEY")) {
-				char * ret = strchr(RecvdData, ':');
-				printf("key is:%s\n", ret + 1);
-				recvKeyId = atoi(ret + 1);
-			}
-			if (strstr(RecvdData, "OP_CHAT")) {
-				char * ret = strchr(RecvdData, ':');
-				printf("chat is:%s\n", ret + 1);
-				recvChatMsg = std::string(ret);
-				isRecvChat = true;
-			}
-			if (strstr(RecvdData, "OP_KEYDEPLOY")) {
-				recvKeyDeployed = true;
-			}
-			if (strstr(RecvdData, "OP_KEYLOST")) {
-				recvKeyLost = true;
-				recvKeyId = -1;
-			}
-
-		}
+		strcpy(sendPosition, "");
+		strcpy(sendChat, "");
+		strcpy(sendKey, "");
 		strcpy(RecvdData, "");
-		strcpy(sendChat, "");
-		strcpy(sendPosition, "");
-		strcpy(sendKey, "");
-
-		strcpy(sendPosition, "");
-		strcpy(sendChat, "");
-		strcpy(sendKey, "");
-
 		sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
 		Sleep(100);
 		res = send(current_server, sendPosition, sizeof(sendPosition), 0);
 
 		if (sendKeyDeployed) {
-			sprintf(keyDeployed, "OP_KEYDEPLOY");
+			sprintf(keyDeployed, "OP_DEPLOY");
+			res = send(current_server, keyDeployed, sizeof(keyDeployed), 0);
 			sendKeyDeployed = false;
 		}
 		if (sendKeyLost) {
-			sprintf(keyLost, "OP_KEYLOST");
+			sprintf(keyLost, "OP_LOST");
+			res = send(current_server, keyLost, sizeof(keyLost), 0);
 			sendKeyLost = false;
 		}
 
@@ -1415,7 +1375,6 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 		}
 		if (isSendChat) {
 			sprintf(sendChat, "OP_CHAT:%s", sendChatMsg.c_str());
-			std::cout << "\n Sending chat msg --" << sendChat;
 			Sleep(100);
 			res = send(current_server, sendChat, sizeof(sendChat), 0);
 			isSendChat = false;
@@ -1436,6 +1395,54 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 			s_handle(res);
 			break;
 		}
+
+		//Sleep(1000);
+		ret = recv(current_server, RecvdData, sizeof(RecvdData), 0);
+		if (ret > 0)
+		{
+			Sleep(100);
+			std::cout << "From Server\n" << RecvdData;
+			
+
+			if (strstr(RecvdData, "OP_POSITION")) {
+				char * ret = strchr(RecvdData, ':');
+				char * token = strtok(ret + 1, ",");
+				float newPos[3];
+				int i = 0;
+				/* walk through other tokens */
+				while (token != NULL) {
+					newPos[i] = atof(token);
+					token = strtok(NULL, ",");
+					i++;
+				}
+				playerPos_recv.x = newPos[0];
+				playerPos_recv.y = newPos[1];
+				playerPos_recv.z = newPos[2];
+			}
+			else if (strstr(RecvdData, "OP_KEY")) {
+				char * ret = strchr(RecvdData, ':');
+				recvKeyId = atoi(ret + 1);
+			}
+			else if (strstr(RecvdData, "OP_CHAT")) {
+				char * ret = strchr(RecvdData, ':');
+				recvChatMsg = std::string(ret);
+				isRecvChat = true;
+			}
+			else if (strstr(RecvdData, "OP_DEPLOY")) {
+				recvKeyDeployed = true;
+			}
+			else if (strstr(RecvdData, "OP_LOST")) {
+				recvKeyLost = true;
+				recvKeyId = -1;
+			}
+			strcpy(RecvdData, "");
+		}
+		strcpy(RecvdData, "");
+		strcpy(sendChat, "");
+		strcpy(sendPosition, "");
+		strcpy(sendKey, "");
+
+		
 
 
 	}
@@ -1580,23 +1587,21 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 			if (strstr(buf, "OP_KEY")) {
 				char * ret = strchr(buf, ':');
 				recvKeyId = atoi(ret + 1);
-				printf("key is:%s\n", ret + 1);
 			}
 			if (strstr(buf, "OP_CHAT")) {
 				char * ret = strchr(buf, ':');
-				printf("chat is:%s\n", ret + 1);
 				recvChatMsg = std::string(ret);
-				std::cout << "\n Received chat :" << recvChatMsg;
 				isRecvChat = true;
 			}
-			if (strstr(buf, "OP_KEYDEPLOY")) {
+			if (strstr(buf, "OP_DEPLOY")) {
 				recvKeyDeployed = true;
 			}
-			if (strstr(buf, "OP_KEYLOST")) {
+			if (strstr(buf, "OP_LOST")) {
 				recvKeyLost = true;
 				recvKeyId = -1;
 			}
 
+			Sleep(100);
 			strcpy(buf, "");
 		}
 
@@ -1605,11 +1610,13 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 		send(current_client, sendPosition, sizeof(sendPosition), 0);
 
 		if (sendKeyDeployed) {
-			sprintf(keyDeployed, "OP_KEYDEPLOY");
+			sprintf(keyDeployed, "OP_DEPLOY");
+			send(current_client, keyDeployed, sizeof(keyDeployed), 0);
 			sendKeyDeployed = false;
 		}
 		if (sendKeyLost) {
-			sprintf(keyLost, "OP_KEYLOST");
+			sprintf(keyLost, "OP_LOST");
+			send(current_client, keyLost, sizeof(keyLost), 0);
 			sendKeyLost = false;
 		}
 
