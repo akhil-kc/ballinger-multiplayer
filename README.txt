@@ -1,6 +1,7 @@
-Original Author: Jonathan Gonzalez Cortes
-New Authors: Akhil Kumar and Arpita Kushwaha
-This is a demo for a single player skill game.
+Authors: Akhil Kumar Chandu and Arpita Kushwaha
+Email: akuma061@uottawa.ca / akush037@uottawa.ca
+
+This is a demo for a multiplayer skill game called "Dino run", based on the single player game by Jonathan Gonzalez Cortes named "Ballenger".
 
 Goals:
 - Collect the 5 keys one by one.
@@ -17,8 +18,6 @@ Keys:
 
 Noclip keys:
 - Enable noclip mode: 	F10
-- Fly up: 		left mouse button
-- Fly down: 		right mouse button
 
 Licensing: The source code of this work, as well as the binaries, are under 
 a Creative Commons Attribution 4.0 International License.
