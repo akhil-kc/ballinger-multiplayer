@@ -49,7 +49,7 @@ int cGame::main_win = 0;
 int cGame::sub_win = 0;
 
 int sendKeyId = -1, recvKeyId = -1;
-bool isSendChat = false, isRecvChat = false, isMultiplayer = false;
+bool isSendChat = false, isRecvChat = false, isMultiplayer = true;
 bool sendKeyDeployed = false, sendKeyLost = false, recvKeyDeployed = false, recvKeyLost = false;
 std::string sendChatMsg;
 std::string recvChatMsg;
@@ -390,6 +390,7 @@ bool cGame::Process()
 
 	if (state == STATE_MENU) {
 		if (keys['s']) {
+			isMultiplayer = false;
 			state = STATE_RUN;
 			Render();
 			glutSetWindow(cGame::sub_win);
@@ -398,7 +399,7 @@ bool cGame::Process()
 			//	return;
 		}
 		else if (keys['m']) {
-			isMultiplayer = true;
+		//	isMultiplayer = true;
 			state = STATE_MULTIPLAYER;
 			Render();
 			glutSetWindow(cGame::sub_win);
@@ -785,7 +786,7 @@ void cGame::Render()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 
-	if ((state == STATE_RUN) && isMultiplayer)
+	//if ((state == STATE_RUN) && isMultiplayer)
 		Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);
 	
 	//updates
@@ -861,7 +862,7 @@ void cGame::Render()
 		//draw player
 		Player.Draw(&Data,&Camera,&Lava,&Shader);
 
-		//if(isMultiplayer)
+		if(isMultiplayer)
 			Player2.Draw(&Data, &Camera, &Lava, &Shader);
 
 		//draw portal
@@ -875,7 +876,7 @@ void cGame::Render()
 		//draw player
 		Player.Draw(&Data,&Camera,&Lava,&Shader);
 
-		//if(isMultiplayer)
+		if(isMultiplayer)
 			Player2.Draw(&Data, &Camera, &Lava, &Shader);
 	}
 
@@ -1342,52 +1343,6 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 
 	while (true)
 	{
-		//Sleep(1000);
-		ret = recv(current_server, RecvdData, sizeof(RecvdData), 0);
-		if (ret > 0)
-		{
-			std::cout << "\n From Server\n" << RecvdData;
-
-			if (strstr(RecvdData, "OP_POSITION")) {
-				char * ret = strchr(RecvdData, ':');
-				char * token = strtok(ret + 1, ",");
-				float newPos[3];
-				int i = 0;
-				/* walk through other tokens */
-				while (token != NULL) {
-					newPos[i] = atof(token);
-					token = strtok(NULL, ",");
-					i++;
-				}
-				playerPos_recv.x = newPos[0];
-				playerPos_recv.y = newPos[1];
-				playerPos_recv.z = newPos[2];
-			}
-			if (strstr(RecvdData, "OP_KEY")) {
-				char * ret = strchr(RecvdData, ':');
-				printf("key is:%s\n", ret + 1);
-				recvKeyId = atoi(ret + 1);
-			}
-			if (strstr(RecvdData, "OP_CHAT")) {
-				char * ret = strchr(RecvdData, ':');
-				printf("chat is:%s\n", ret + 1);
-				recvChatMsg = std::string(ret);
-				isRecvChat = true;
-			}
-			if (strstr(RecvdData, "OP_KEYDEPLOY")) {
-				recvKeyDeployed = true;
-			}
-			if (strstr(RecvdData, "OP_KEYLOST")) {
-				recvKeyLost = true;
-				recvKeyId = -1;
-			}
-
-		}
-		strcpy(RecvdData, "");
-		strcpy(sendChat, "");
-		strcpy(sendPosition, "");
-		strcpy(sendKey, "");
-
 		strcpy(sendPosition, "");
 		strcpy(sendChat, "");
 		strcpy(sendKey, "");
@@ -1397,11 +1352,13 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 		res = send(current_server, sendPosition, sizeof(sendPosition), 0);
 
 		if (sendKeyDeployed) {
-			sprintf(keyDeployed, "OP_KEYDEPLOY");
+			sprintf(keyDeployed, "OP_DEPLOY");
+			res = send(current_server, keyDeployed, sizeof(keyDeployed), 0);
 			sendKeyDeployed = false;
 		}
 		if (sendKeyLost) {
-			sprintf(keyLost, "OP_KEYLOST");
+			sprintf(keyLost, "OP_LOST");
+			res = send(current_server, keyLost, sizeof(keyLost), 0);
 			sendKeyLost = false;
 		}
 
@@ -1412,7 +1369,6 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 		}
 		if (isSendChat) {
 			sprintf(sendChat, "OP_CHAT:%s", sendChatMsg.c_str());
-			std::cout << "\n Sending chat msg --" << sendChat;
 			Sleep(100);
 			res = send(current_server, sendChat, sizeof(sendChat), 0);
 			isSendChat = false;
@@ -1433,6 +1389,56 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 			s_handle(res);
 			break;
 		}
+
+		//Sleep(1000);
+		ret = recv(current_server, RecvdData, sizeof(RecvdData), 0);
+		if (ret > 0)
+		{
+			std::cout << "\n From Server\n" << RecvdData;
+			std::cout << "\n Received: " << RecvdData;
+
+			if (strstr(RecvdData, "OP_POSITION")) {
+				char * ret = strchr(RecvdData, ':');
+				char * token = strtok(ret + 1, ",");
+				float newPos[3];
+				int i = 0;
+				/* walk through other tokens */
+				while (token != NULL) {
+					newPos[i] = atof(token);
+					token = strtok(NULL, ",");
+					i++;
+				}
+				playerPos_recv.x = newPos[0];
+				playerPos_recv.y = newPos[1];
+				playerPos_recv.z = newPos[2];
+			}
+			else if (strstr(RecvdData, "OP_KEY")) {
+				char * ret = strchr(RecvdData, ':');
+				printf("key is:%s\n", ret + 1);
+				recvKeyId = atoi(ret + 1);
+			}
+			else if (strstr(RecvdData, "OP_CHAT")) {
+				char * ret = strchr(RecvdData, ':');
+				printf("chat is:%s\n", ret + 1);
+				recvChatMsg = std::string(ret);
+				isRecvChat = true;
+			}
+			else if (strstr(RecvdData, "OP_DEPLOY")) {
+				recvKeyDeployed = true;
+			}
+			else if (strstr(RecvdData, "OP_LOST")) {
+				recvKeyLost = true;
+				recvKeyId = -1;
+			}
+			Sleep(100);
+			strcpy(RecvdData, "");
+		}
+		strcpy(RecvdData, "");
+		strcpy(sendChat, "");
+		strcpy(sendPosition, "");
+		strcpy(sendKey, "");
+
+		
 
 
 	}
@@ -1583,17 +1589,17 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 				char * ret = strchr(buf, ':');
 				printf("chat is:%s\n", ret + 1);
 				recvChatMsg = std::string(ret);
-				std::cout << "\n Received chat :" << recvChatMsg;
 				isRecvChat = true;
 			}
-			if (strstr(buf, "OP_KEYDEPLOY")) {
+			if (strstr(buf, "OP_DEPLOY")) {
 				recvKeyDeployed = true;
 			}
-			if (strstr(buf, "OP_KEYLOST")) {
+			if (strstr(buf, "OP_LOST")) {
 				recvKeyLost = true;
 				recvKeyId = -1;
 			}
 
+			Sleep(100);
 			strcpy(buf, "");
 		}
 
@@ -1602,11 +1608,13 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 		send(current_client, sendPosition, sizeof(sendPosition), 0);
 
 		if (sendKeyDeployed) {
-			sprintf(keyDeployed, "OP_KEYDEPLOY");
+			sprintf(keyDeployed, "OP_DEPLOY");
+			send(current_client, keyDeployed, sizeof(keyDeployed), 0);
 			sendKeyDeployed = false;
 		}
 		if (sendKeyLost) {
-			sprintf(keyLost, "OP_KEYLOST");
+			sprintf(keyLost, "OP_LOST");
+			send(current_client, keyLost, sizeof(keyLost), 0);
 			sendKeyLost = false;
 		}
 
