@@ -78,15 +78,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="3dclasses.h" />
+    <ClInclude Include="AutoArr.h" />
+    <ClInclude Include="BoundingBox.h" />
     <ClInclude Include="cBicho.h" />
     <ClInclude Include="cCamera.h" />
     <ClInclude Include="cData.h" />
     <ClInclude Include="cGame.h" />
+    <ClInclude Include="CGTexture.h" />
     <ClInclude Include="cKey.h" />
     <ClInclude Include="cLava.h" />
     <ClInclude Include="cColumn.h" />
     <ClInclude Include="cModel.h" />
-    <ClInclude Include="cPlayer.h" />
     <ClInclude Include="cPortal.h" />
     <ClInclude Include="cScene.h" />
     <ClInclude Include="cShader.h" />
@@ -94,16 +97,30 @@
     <ClInclude Include="cSound.h" />
     <ClInclude Include="cTerrain.h" />
     <ClInclude Include="cTexture.h" />
+    <ClInclude Include="DataFile.h" />
+    <ClInclude Include="Dino.h" />
+    <ClInclude Include="DisallowCopy.h" />
     <ClInclude Include="Globals.h" />
     <ClInclude Include="cRespawnPoint.h" />
+    <ClInclude Include="Model.h" />
+    <ClInclude Include="ModelPart.h" />
+    <ClInclude Include="Plane.h" />
+    <ClInclude Include="Ray.h" />
+    <ClInclude Include="Statistics.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="Timer.h" />
+    <ClInclude Include="Triangle_new.h" />
+    <ClInclude Include="util.h" />
+    <ClInclude Include="Vector.h" />
+    <ClInclude Include="Vertex.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cBicho.cpp" />
     <ClCompile Include="cCamera.cpp" />
     <ClCompile Include="cData.cpp" />
     <ClCompile Include="cGame.cpp" />
+    <ClCompile Include="CGtexture.cpp" />
     <ClCompile Include="cKey.cpp" />
     <ClCompile Include="cLava.cpp" />
     <ClCompile Include="cColumn.cpp" />
@@ -116,8 +133,14 @@
     <ClCompile Include="cSound.cpp" />
     <ClCompile Include="cTerrain.cpp" />
     <ClCompile Include="cTexture.cpp" />
+    <ClCompile Include="DataFile.cpp" />
+    <ClCompile Include="Dino.cpp" />
+    <ClCompile Include="glutil.c" />
     <ClCompile Include="GLUTMain.cpp" />
     <ClCompile Include="cRespawnPoint.cpp" />
+    <ClCompile Include="Model.cpp" />
+    <ClCompile Include="ModelPart.cpp" />
+    <ClCompile Include="Statistics.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

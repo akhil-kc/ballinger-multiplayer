@@ -47,7 +47,7 @@ Coord playerPos;
 Coord playerPos_recv;
 int cGame::main_win = 0;
 int cGame::sub_win = 0;
-
+float RADIUS = 0.0;
 int sendKeyId = -1, recvKeyId = -1;
 bool isSendChat = false, isRecvChat = false, isMultiplayer = false;
 bool sendKeyDeployed = false, sendKeyLost = false, recvKeyDeployed = false, recvKeyLost = false;
@@ -166,9 +166,9 @@ bool cGame::Init(int lvl)
 
 	//Player initialization
 	Player.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2)+RADIUS,TERRAIN_SIZE/2);
-	if (isMultiplayer)
-		Player2.SetPos(TERRAIN_SIZE / 2, Terrain.GetHeight(TERRAIN_SIZE / 2, TERRAIN_SIZE / 2) + RADIUS, TERRAIN_SIZE / 2);
-
+	/*if (isMultiplayer)
+		Player2.SetPos(TERRAIN_SIZE / 2, Terrain.GetHeight(TERRAIN_SIZE / 2, TERRAIN_SIZE / 2) + RADIUS, TERRAIN_SIZE / 2);*/
+	
 	//Portal initialization
 	Portal.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2+32),TERRAIN_SIZE/2+32);
 
@@ -192,7 +192,10 @@ bool cGame::Init(int lvl)
 	respawn_points.push_back(rp);
 
 	Sound.Play(SOUND_AMBIENT);
-
+	
+	Player.init();
+	RADIUS = DINO_TEXTURE_BOX.dy() / 2;
+	Player.getTimer().start();
 	return res;
 }
 
@@ -205,9 +208,9 @@ bool cGame::Loop()
     if(state == STATE_LIVELOSS)
 	{
 		Render();
-		glutSetWindow(cGame::sub_win);
-		View4Display();
-		glutSetWindow(cGame::main_win);
+		//glutSetWindow(cGame::sub_win);
+		//View4Display();
+		//glutSetWindow(cGame::main_win);
 		Player.SetPos(respawn_points[respawn_id].GetX(),respawn_points[respawn_id].GetY()+RADIUS,respawn_points[respawn_id].GetZ());
 		state = STATE_RUN;
 	}
@@ -219,9 +222,9 @@ bool cGame::Loop()
 		res = Process();
 		if (res) {
 			Render();
-			glutSetWindow(cGame::sub_win);
-			View4Display();
-			glutSetWindow(cGame::main_win);
+			//glutSetWindow(cGame::sub_win);
+			//View4Display();
+			//glutSetWindow(cGame::main_win);
 		}
 	}
 
@@ -392,18 +395,18 @@ bool cGame::Process()
 		if (keys['s']) {
 			state = STATE_RUN;
 			Render();
-			glutSetWindow(cGame::sub_win);
-			View4Display();
-			glutSetWindow(cGame::main_win);
+			//glutSetWindow(cGame::sub_win);
+			//View4Display();
+			//glutSetWindow(cGame::main_win);
 			//	return;
 		}
 		else if (keys['m']) {
 			isMultiplayer = true;
 			state = STATE_MULTIPLAYER;
 			Render();
-			glutSetWindow(cGame::sub_win);
-			View4Display();
-			glutSetWindow(cGame::main_win);
+			//glutSetWindow(cGame::sub_win);
+			//View4Display();
+			//glutSetWindow(cGame::main_win);
 		}
 	}
 	else if (state == STATE_RUN && keys['c']) {
@@ -785,8 +788,8 @@ void cGame::Render()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 
-	if ((state == STATE_RUN) && isMultiplayer)
-		Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);
+	/*if ((state == STATE_RUN) && isMultiplayer)
+		Player2.SetPos(playerPos_recv.x, playerPos_recv.y, playerPos_recv.z);*/
 	
 	//updates
 	if(state != STATE_LIVELOSS) Lava.Update();
@@ -808,8 +811,8 @@ void cGame::Render()
 		if(i==4) glColor3f(1.0f,0.0f,1.0f); //violet
 
 		if(i==pickedkey_id) target_keys[i].DrawPicked(Player.GetX(),Player.GetY(),Player.GetZ(),Camera.GetYaw(),&Model,&Data,&Shader);
-		else if (isMultiplayer && (i == recvKeyId))
-			target_keys[i].DrawPicked(Player2.GetX(), Player2.GetY(), Player2.GetZ(), Camera.GetYaw(), &Model, &Data, &Shader);
+		/*else if (isMultiplayer && (i == recvKeyId))
+			target_keys[i].DrawPicked(Player2.GetX(), Player2.GetY(), Player2.GetZ(), Camera.GetYaw(), &Model, &Data, &Shader);*/
 		else if(target_keys[i].IsDeployed())
 		{
 			target_keys[i].DrawDeployed(columns[i].GetHoleX(),columns[i].GetHoleY(),columns[i].GetHoleZ(),columns[i].GetYaw(),&Model,&Data,&Shader);
@@ -855,15 +858,15 @@ void cGame::Render()
 
 	//draw columns
 	for(unsigned int i=0; i<columns.size(); i++) columns[i].Draw(&Shader,&Model,&Data,i);
-
+	Player.setPhase(Player.getTimer().getTime());
 	if(abs(Camera.GetZ()-Portal.GetZ()) < Camera.GetDistance())
 	{
 		//draw player
-		Player.Draw(&Data,&Camera,&Lava,&Shader);
+		//Player.Draw(&Data,&Camera,&Lava,&Shader);
 
 		//if(isMultiplayer)
-			Player2.Draw(&Data, &Camera, &Lava, &Shader);
-
+			//Player2.Draw(&Data, &Camera, &Lava, &Shader);
+		Player.draw();
 		//draw portal
 		Portal.Draw(&Data,portal_activated,&Shader,&Model);
 	}
@@ -871,12 +874,12 @@ void cGame::Render()
 	{
 		//draw portal
 		Portal.Draw(&Data,portal_activated,&Shader,&Model);
-	
+		Player.setPhase(Player.getTimer().getTime());
 		//draw player
-		Player.Draw(&Data,&Camera,&Lava,&Shader);
-
+		//Player.Draw(&Data,&Camera,&Lava,&Shader);
+		Player.draw();
 		//if(isMultiplayer)
-			Player2.Draw(&Data, &Camera, &Lava, &Shader);
+			//Player2.Draw(&Data, &Camera, &Lava, &Shader);
 	}
 
 	//draw respawn points

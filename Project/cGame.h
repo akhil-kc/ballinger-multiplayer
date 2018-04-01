@@ -1,12 +1,12 @@
 #pragma once
 
-#include "cPlayer.h"
+//#include "cPlayer.h"
 #include "cSound.h"
 #include "cRespawnPoint.h"
 #include "cColumn.h"
 #include "cPortal.h"
 #include "cKey.h"
-
+#include "Dino.h"
 #define SCREEN_WIDTH	800
 #define SCREEN_HEIGHT	600
 
@@ -73,8 +73,9 @@ public:
 	cPortal Portal;
 	cScene Scene;
 	cData Data;
-	cPlayer Player;
-	cPlayer Player2;
+	//Dino dino;
+	Dino Player;
+	//Dino Player2;
 	cCamera Camera;
 	cSound Sound;
 	cShader Shader;
