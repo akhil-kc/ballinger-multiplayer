@@ -5,12 +5,21 @@ Dino::Dino()
 {
 	fade = true;
 }
-void Dino::init()
+void Dino::init(bool isPlayer2)
 {
-	_body.loadSGF(DINO_BODY_FILE);
-	_eyes.loadSGF(DINO_EYES_FILE);
-	_arm.loadSGF(DINO_ARM_FILE);
-	_leg.loadSGF(DINO_LEG_FILE);
+	if (isPlayer2) {
+		_body.loadSGF(DINO_RED_BODY_FILE);
+		_eyes.loadSGF(DINO_EYES_FILE);
+		_arm.loadSGF(DINO_RED_ARM_FILE);
+		_leg.loadSGF(DINO_RED_LEG_FILE);
+	}
+	else {
+		_body.loadSGF(DINO_BODY_FILE);
+		_eyes.loadSGF(DINO_EYES_FILE);
+		_arm.loadSGF(DINO_ARM_FILE);
+		_leg.loadSGF(DINO_LEG_FILE);
+	}
+	
 
 	// Load the texture
 	CGTexture *pTex = new CGTexture(DINO_TEXTURE);

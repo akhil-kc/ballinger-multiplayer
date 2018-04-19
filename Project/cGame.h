@@ -7,8 +7,8 @@
 #include "cPortal.h"
 #include "cKey.h"
 #include "Dino.h"
-#define SCREEN_WIDTH	800
-#define SCREEN_HEIGHT	600
+#define SCREEN_WIDTH	1366
+#define SCREEN_HEIGHT	745
 
 #define FRAMERATE 60
 #define GRAVITY 0.015f
@@ -57,7 +57,8 @@ public:
 	//Output
 	void Reshape(int w, int h);
 	void Render();
-	void View4Display();
+	void drawNavigation(float player1x, float player1z, float player2x, float player2z);
+	//bool checkDeadReckoning(float x, float z);
 
 public:
 	unsigned char keys[256];
@@ -83,6 +84,7 @@ public:
 	cTerrain Terrain;
 	cLava Lava;
 	static int main_win, sub_win;
+	
 
 	void Physics(cBicho &object);
 	

@@ -34,7 +34,9 @@ void s_cl(char *a, int x);
 void s_handle(int s);
 int connectToServer();
 DWORD WINAPI receive_cmd_server(LPVOID lpParam);
+DWORD WINAPI send_cmd_server(LPVOID lpParam);
 DWORD WINAPI receive_cmd_client(LPVOID lpParam);
+DWORD WINAPI send_cmd_client(LPVOID lpParam);
 cGame::cGame(void) {}
 cGame::~cGame(void){}
 SOCKET sock, client;
@@ -46,14 +48,17 @@ float mx, my, mz;
 Coord playerPos;
 Coord playerPos_recv;
 float RADIUS = 0.0;
+float WIDTH = 0.0;
 int cGame::main_win = 0;
 int cGame::sub_win = 0;
+static int deadCounter = 0;
 
 int sendKeyId = -1, recvKeyId = -1;
 bool isSendChat = false, isRecvChat = false, isMultiplayer = true;
 bool sendKeyDeployed = false, sendKeyLost = false, recvKeyDeployed = false, recvKeyLost = false;
 std::string sendChatMsg;
 std::string recvChatMsg;
+static float prev_pos_x, prev_pos_z;
 
 bool cGame::Init(int lvl)
 {
@@ -170,6 +175,8 @@ bool cGame::Init(int lvl)
 	if (isMultiplayer)
 		Player2.SetPos(TERRAIN_SIZE / 2, Terrain.GetHeight(TERRAIN_SIZE / 2, TERRAIN_SIZE / 2) + RADIUS, TERRAIN_SIZE / 2);
 
+	prev_pos_x = TERRAIN_SIZE / 2;
+	prev_pos_z = TERRAIN_SIZE / 2;
 	//Portal initialization
 	Portal.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2+32),TERRAIN_SIZE/2+32);
 
@@ -194,10 +201,11 @@ bool cGame::Init(int lvl)
 
 	Sound.Play(SOUND_AMBIENT);
 
-	Player.init();
-	Player2.init();
+	Player.init(false);
+	Player2.init(true);
 	Player.getTimer().start();
 	RADIUS = DINO_TEXTURE_BOX.dy() / 2;
+	WIDTH = DINO_TEXTURE_BOX.dx() / 2;
 	return res;
 }
 
@@ -211,7 +219,7 @@ bool cGame::Loop()
 	{
 		Render();
 		glutSetWindow(cGame::sub_win);
-		View4Display();
+		drawNavigation(Player.GetX(), Player.GetZ(), Player2.GetX(), Player2.GetZ());
 		glutSetWindow(cGame::main_win);
 		Player.SetPos(respawn_points[respawn_id].GetX(),respawn_points[respawn_id].GetY()+RADIUS,respawn_points[respawn_id].GetZ());
 		state = STATE_RUN;
@@ -225,7 +233,7 @@ bool cGame::Loop()
 		if (res) {
 			Render();
 			glutSetWindow(cGame::sub_win);
-			View4Display();
+			drawNavigation(Player.GetX(), Player.GetZ(), Player2.GetX(), Player2.GetZ());
 			glutSetWindow(cGame::main_win);
 		}
 	}
@@ -365,21 +373,110 @@ void ResetViewport()
 	glLoadIdentity();
 }
 
-//View4Display
-void cGame::View4Display() {
-	glClearColor(0.0, 0.0, 0.0, 0.0);         // black background 
-	glMatrixMode(GL_PROJECTION);              // setup viewing projection 
-	glLoadIdentity();                           // start with identity matrix
-	glLineWidth(2.5);
-	glOrtho(0.0, 10.0, 0.0, 10.0, -1.0, 1.0);   // setup a 10x10x2 viewing world
-	glClear(GL_COLOR_BUFFER_BIT);
-	glBegin(GL_LINE);
+bool checkDeadReckoning(float x, float z) {
+	deadCounter++;
+	float distance = sqrtf(pow((prev_pos_x - x), 2) + pow((prev_pos_z - z), 2));
+	if ((distance > 5) || (deadCounter >= 5)) {
+		prev_pos_x = x;
+		prev_pos_z = z;
+		deadCounter = 0;
+		return true;
+	}
+	return false;
+}
 
-	glColor3f(1.0, 0.0, 0.0);
-	glVertex3f(0.0, 0.0, 0.0);
-	glVertex3f(10.0, 0.0, 0.0);
+//Navigation subwindow
+void cGame::drawNavigation(float player1x, float player1z, float player2x, float player2z) {
 
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+
+	static int radius = 1.5;
+	glPushMatrix();
+
+	if (!target_keys[0].IsDeployed()) {
+		glPushMatrix();
+		glTranslatef(((target_keys[0].GetX() - 512) / 512), ((target_keys[0].GetZ() - 512) / 512), 0.0);
+		glColor3f(1.0f, 0.0f, 0.0f);
+		glScalef(0.05, 0.05, 0.05);
+		glBegin(GL_POLYGON);
+		for (double i = 0; i < 2 * PI; i += PI / 6)
+			glVertex3f(cos(i) * radius, sin(i) * radius, 0.0);
+		glEnd();
+		glPopMatrix();
+	}
+	if (!target_keys[1].IsDeployed()) {
+		glPushMatrix();
+		glTranslatef(((target_keys[1].GetX() - 512) / 512), ((target_keys[1].GetZ() - 512) / 512), 0.0);
+		glColor3f(1.0f, 1.0f, 0.0f);
+		glScalef(0.05, 0.05, 0.05);
+		glBegin(GL_POLYGON);
+		for (double i = 0; i < 2 * PI; i += PI / 6)
+			glVertex3f(cos(i) * radius, sin(i) * radius, 0.0);
+		glEnd();
+		glPopMatrix();
+	}
+	if (!target_keys[2].IsDeployed()) {
+		glPushMatrix();
+		glTranslatef(((target_keys[2].GetX() - 512) / 512), ((target_keys[2].GetZ() - 512) / 512), 0.0);
+		glColor3f(0.0f, 1.0f, 0.0f);
+		glScalef(0.05, 0.05, 0.05);
+		glBegin(GL_POLYGON);
+		for (double i = 0; i < 2 * PI; i += PI / 6)
+			glVertex3f(cos(i) * radius, sin(i) * radius, 0.0);
+		glEnd();
+		glPopMatrix();
+	}
+	if (!target_keys[3].IsDeployed()) {
+		glPushMatrix();
+		glTranslatef(((target_keys[3].GetX() - 512) / 512), ((target_keys[3].GetZ() - 512) / 512), 0.0);
+		glColor3f(0.2f, 0.2f, 1.0f);
+		glScalef(0.05, 0.05, 0.05);
+		glBegin(GL_POLYGON);
+		for (double i = 0; i < 2 * PI; i += PI / 6)
+			glVertex3f(cos(i) * radius, sin(i) * radius, 0.0);
+		glEnd();
+		glPopMatrix();
+	}
+	if (!target_keys[4].IsDeployed()) {
+		glPushMatrix();
+		glTranslatef(((target_keys[4].GetX() - 512) / 512), ((target_keys[4].GetZ() - 512) / 512), 0.0);
+		glColor3f(1.0f, 0.0f, 1.0f);
+		glScalef(0.05, 0.05, 0.05);
+		glBegin(GL_POLYGON);
+		for (double i = 0; i < 2 * PI; i += PI / 6)
+			glVertex3f(cos(i) * radius, sin(i) * radius, 0.0);
+		glEnd();
+		glPopMatrix();
+	}
+
+
+	glPushMatrix();
+	glTranslatef((player1x - 512) / 512, (player1z - 512) / 512, 0.0);
+	glColor3f(0.0, 1.0, 0.0);
+	glScalef(0.15, 0.19, 0.05);
+	glBegin(GL_TRIANGLES);
+	glVertex3f(0, 0, 0);
+	glVertex3f(1, 0, 0);
+	glVertex3f(0, 1, 0);
 	glEnd();
+	glPopMatrix();
+
+	if (isMultiplayer) {
+		glPushMatrix();
+		glTranslatef((player2x - 512) / 512, (player2z - 512) / 512, 0);
+		glColor3f(1.0, 0.0, 0.0);
+		glScalef(0.15, 0.19, 0.05);
+		glBegin(GL_TRIANGLES);
+		glVertex3f(0, 0, 0);
+		glVertex3f(1, 0, 0);
+		glVertex3f(0, 1, 0);
+		glEnd();
+		glPopMatrix();
+	}
+
+	glPopMatrix();
+
 	glFlush();
 	glutSwapBuffers();
 }
@@ -406,16 +503,15 @@ bool cGame::Process()
 			state = STATE_RUN;
 			Render();
 			glutSetWindow(cGame::sub_win);
-			View4Display();
+			drawNavigation(Player.GetX(), Player.GetZ(), Player2.GetX(), Player2.GetZ());
 			glutSetWindow(cGame::main_win);
-			//	return;
 		}
 		else if (keys['m']) {
 		//	isMultiplayer = true;
 			state = STATE_MULTIPLAYER;
 			Render();
 			glutSetWindow(cGame::sub_win);
-			View4Display();
+			drawNavigation(Player.GetX(), Player.GetZ(), Player2.GetX(), Player2.GetZ());
 			glutSetWindow(cGame::main_win);
 		}
 	}
@@ -564,13 +660,13 @@ bool cGame::Process()
 				Player.SetVel(0.0f, 0.0f, 0.0f);
 				pickedkey_id = -1;
 				sendKeyLost = true;
-				sendKeyId = -1;
-				if (lives != 0)
-					lives--;
-				state = STATE_LIVELOSS;
-				Sound.Play(SOUND_SWISH);
-				if (lives <= 0)
-					state = STATE_GAME_OVER;
+sendKeyId = -1;
+if (lives != 0)
+lives--;
+state = STATE_LIVELOSS;
+Sound.Play(SOUND_SWISH);
+if (lives <= 0)
+state = STATE_GAME_OVER;
 			}
 
 			Coord P; P.x = Player.GetX(); P.y = Player.GetY(); P.z = Player.GetZ();
@@ -609,13 +705,13 @@ bool cGame::Process()
 			int whiteKeyId = -1;
 			for (unsigned int i = 0; i < white_keys.size(); i++)
 			{
-					Coord K; K.x = white_keys[i].GetX(); K.y = white_keys[i].GetY(); K.z = white_keys[i].GetZ();
-					if (sqrt((P.x - K.x)*(P.x - K.x) + (P.y - K.y)*(P.y - K.y) + (P.z - K.z)*(P.z - K.z)) <= RADIUS * 2)
-					{
-						score += 20;
-						whiteKeyId = i;
-						Sound.Play(SOUND_PICKUP);
-					}
+				Coord K; K.x = white_keys[i].GetX(); K.y = white_keys[i].GetY(); K.z = white_keys[i].GetZ();
+				if (sqrt((P.x - K.x)*(P.x - K.x) + (P.y - K.y)*(P.y - K.y) + (P.z - K.z)*(P.z - K.z)) <= RADIUS * 2)
+				{
+					score += 20;
+					whiteKeyId = i;
+					Sound.Play(SOUND_PICKUP);
+				}
 			}
 
 			if (whiteKeyId != -1) {
@@ -662,11 +758,41 @@ bool cGame::Process()
 	return res;
 }
 
+bool checkPlayerCollision(Vector playerCenter, Vector player2) {
+	if ((abs(playerCenter.x - player2.x) < WIDTH) && (abs(playerCenter.z - player2.z) < WIDTH)) {
+		return true;
+	}
+	return false;
+}
+
+
+
 void cGame::Physics(cBicho &object)
 {
+	if (isMultiplayer) {
+		Vector player2Pos;
+		player2Pos.x = Player2.GetX();
+		player2Pos.y = Player2.GetY();
+		player2Pos.z = Player2.GetZ();
+		Vector player1Pos;
+		player1Pos.x = Player.GetX();
+		player1Pos.y = Player.GetY();
+		player1Pos.z = Player.GetZ();
+		if (checkPlayerCollision(player1Pos, player2Pos)) {
+			//playerPos.x -= 2;
+			Player.SetX(Player.GetX() - 2);
+			Player.SetVX(0);
+			Player.SetVY(0);
+			Player.SetVZ(0);
+		}
+	}
+
 	Coord initialPos; initialPos.x = object.GetX(); initialPos.y = object.GetY(); initialPos.z = object.GetZ();
+
 	Coord center; center.x = object.GetX() + object.GetVX(); center.y = object.GetY() + object.GetVY(); center.z = object.GetZ() + object.GetVZ();
+	
 	std::vector<Vector> cnormals = Terrain.GetCollisionNormals(center,RADIUS);
+	
 	object.SetPos(center.x,center.y,center.z); //despues de GetCollisionNormals la posicion center sera una posicion valida sobre la superficie
 
 	//update angles of rotation by movement
@@ -1333,10 +1459,12 @@ int connectToServer()
 		memcpy(&ser, &addr, sizeof(SOCKADDR));
 	}
 
+	CreateThread(NULL, 0, send_cmd_client, (LPVOID)sock, 0, &poll);
+
 	CreateThread(NULL, 0, receive_cmd_client, (LPVOID)sock, 0, &poll);
 }
 
-DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
+DWORD WINAPI send_cmd_client(LPVOID lpParam) {
 	char RecvdData[100] = "";
 	int ret, res;
 	char sendPosition[100];
@@ -1347,15 +1475,22 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 	SOCKET current_server = (SOCKET)lpParam;
 	std::cout << "Client Thread Created\n";
 
+	sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+	Sleep(100);
+	res = send(current_server, sendPosition, sizeof(sendPosition), 0);
+
 	while (true)
 	{
 		strcpy(sendPosition, "");
 		strcpy(sendChat, "");
 		strcpy(sendKey, "");
 		strcpy(RecvdData, "");
-		sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
-		Sleep(100);
-		res = send(current_server, sendPosition, sizeof(sendPosition), 0);
+		res = 1;
+		if (checkDeadReckoning(playerPos.x, playerPos.z)) {
+			sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+			Sleep(100);
+			res = send(current_server, sendPosition, sizeof(sendPosition), 0);
+		}
 
 		if (sendKeyDeployed) {
 			sprintf(keyDeployed, "OP_DEPLOY");
@@ -1396,13 +1531,35 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 			break;
 		}
 
-		//Sleep(1000);
+		strcpy(RecvdData, "");
+		strcpy(sendChat, "");
+		strcpy(sendPosition, "");
+		strcpy(sendKey, "");
+	}
+	return 1;
+}
+
+DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
+	char RecvdData[100] = "";
+	int ret, res;
+	char sendPosition[100];
+	char sendKey[100];
+	char sendChat[100];
+	char keyDeployed[100];
+	char keyLost[100];
+	SOCKET current_server = (SOCKET)lpParam;
+	std::cout << "Client Thread Created\n";
+
+	sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+	Sleep(100);
+	res = send(current_server, sendPosition, sizeof(sendPosition), 0);
+
+	while (true)
+	{
 		ret = recv(current_server, RecvdData, sizeof(RecvdData), 0);
 		if (ret > 0)
 		{
 			Sleep(100);
-			std::cout << "From Server\n" << RecvdData;
-			
 
 			if (strstr(RecvdData, "OP_POSITION")) {
 				char * ret = strchr(RecvdData, ':');
@@ -1441,10 +1598,6 @@ DWORD WINAPI receive_cmd_client(LPVOID lpParam) {
 		strcpy(sendChat, "");
 		strcpy(sendPosition, "");
 		strcpy(sendKey, "");
-
-		
-
-
 	}
 	return 1;
 }
@@ -1456,9 +1609,7 @@ void s_handle(int s)
 	if (client)
 		closesocket(client);
 	WSACleanup();
-	//Sleep(1000);
 	std::cout << "EXIT SIGNAL :" << s;
-	//exit(0);
 }
 
 void s_cl(char *a, int x)
@@ -1524,14 +1675,73 @@ void startServer()
 	sockaddr_in from;
 	int fromlen = sizeof(from);
 
-	// loop forever 
-
 	// accept connections
 	client = accept(sock, (struct sockaddr*)&from, &fromlen);
 	printf("Client connected\r\n"); 
 
+	CreateThread(NULL, 0, send_cmd_server, (LPVOID)client, 0, &thread);
+
 	CreateThread(NULL, 0, receive_cmd_server, (LPVOID)client, 0, &thread);
 
+}
+
+DWORD WINAPI send_cmd_server(LPVOID lpParam)
+{
+	printf("Server send thread created\r\n");
+
+	// set our socket to the socket passed in as a parameter   
+	SOCKET current_client = (SOCKET)lpParam;
+
+	// buffer to hold our recived data
+	char buf[100];
+	// buffer to hold our sent data
+	char sendPosition[100];
+	char sendKey[100];
+	char sendEvent[100];
+	char sendChat[1024];
+	char keyDeployed[100];
+	char keyLost[100];
+	// for error checking 
+	int res;
+
+	// our recv loop
+	while (true)
+	{
+		if (checkDeadReckoning(playerPos.x, playerPos.z)) {
+			sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
+			Sleep(100);
+			send(current_client, sendPosition, sizeof(sendPosition), 0);
+		}
+
+		if (sendKeyDeployed) {
+			sprintf(keyDeployed, "OP_DEPLOY");
+			send(current_client, keyDeployed, sizeof(keyDeployed), 0);
+			sendKeyDeployed = false;
+		}
+		if (sendKeyLost) {
+			sprintf(keyLost, "OP_LOST");
+			send(current_client, keyLost, sizeof(keyLost), 0);
+			sendKeyLost = false;
+		}
+
+		if (sendKeyId != -1) {
+			sprintf(sendKey, "OP_KEY:%d", sendKeyId);
+			Sleep(100);
+			send(current_client, sendKey, sizeof(sendKey), 0);
+		}
+		if (isSendChat) {
+			sprintf(sendChat, "OP_CHAT:%s", sendChatMsg.c_str());
+			Sleep(100);
+			res = send(current_client, sendChat, sizeof(sendChat), 0);
+			isSendChat = false;
+		}
+
+		// clear buffers
+		strcpy(sendPosition, "");
+		strcpy(sendKey, "");
+		strcpy(sendChat, "");
+		strcpy(buf, "");
+	}
 }
 
 DWORD WINAPI receive_cmd_server(LPVOID lpParam)
@@ -1556,7 +1766,6 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 	// our recv loop
 	while (true)
 	{
-		//		Sleep(1000);
 		res = recv(current_client, buf, sizeof(buf), 0); // recv cmds
 
 		if (res == 0)
@@ -1574,7 +1783,7 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 				char * token = strtok(ret + 1, ",");
 				float newPos[3];
 				int i = 0;
-				/* walk through other tokens */
+				
 				while (token != NULL) {
 					newPos[i] = atof(token);
 					token = strtok(NULL, ",");
@@ -1603,33 +1812,6 @@ DWORD WINAPI receive_cmd_server(LPVOID lpParam)
 
 			Sleep(100);
 			strcpy(buf, "");
-		}
-
-		sprintf(sendPosition, "OP_POSITION:%f,%f,%f", playerPos.x, playerPos.y, playerPos.z);
-		Sleep(100);
-		send(current_client, sendPosition, sizeof(sendPosition), 0);
-
-		if (sendKeyDeployed) {
-			sprintf(keyDeployed, "OP_DEPLOY");
-			send(current_client, keyDeployed, sizeof(keyDeployed), 0);
-			sendKeyDeployed = false;
-		}
-		if (sendKeyLost) {
-			sprintf(keyLost, "OP_LOST");
-			send(current_client, keyLost, sizeof(keyLost), 0);
-			sendKeyLost = false;
-		}
-
-		if (sendKeyId != -1) {
-			sprintf(sendKey, "OP_KEY:%d", sendKeyId);
-			Sleep(100);
-			send(current_client, sendKey, sizeof(sendKey), 0);
-		}
-		if (isSendChat) {
-			sprintf(sendChat, "OP_CHAT:%s", sendChatMsg.c_str());
-			Sleep(100);
-			res = send(current_client, sendChat, sizeof(sendChat), 0);
-			isSendChat = false;
 		}
 
 		// clear buffers

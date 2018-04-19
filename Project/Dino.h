@@ -17,7 +17,10 @@
 static const char	DINO_BODY_FILE[] = "../models/dino/body.sgf",
 DINO_EYES_FILE[] = "../models/dino/eyes.sgf",
 DINO_ARM_FILE[] = "../models/dino/arm.sgf",
-DINO_LEG_FILE[] = "../models/dino/leg.sgf";
+DINO_LEG_FILE[] = "../models/dino/leg.sgf",
+DINO_RED_BODY_FILE[] = "../models/dino/bodyr.sgf",
+DINO_RED_ARM_FILE[] = "../models/dino/armr.sgf",
+DINO_RED_LEG_FILE[] = "../models/dino/legr.sgf";
 
 static const char	DINO_TEXTURE[] = "../textures/dinoskin.rgb";
 
@@ -32,7 +35,7 @@ public:
 	virtual ~Dino(void);
 	void SetFade(bool b);
 	void setPhase(float phase); // phase is 0..1 of the walking cycle
-	void init();
+	void init(bool isPlayer2);
 	void rotate(float angle);
 	Timer _timer;
 	Timer & getTimer();

@@ -68,7 +68,7 @@ void AppIdle()
 
 //View4Display
 void ViewDisplay() {
-	Game.View4Display();
+	Game.drawNavigation(Game.Player.GetX(), Game.Player.GetZ(), Game.Player2.GetX(), Game.Player2.GetZ());;
 }
 
 
@@ -94,7 +94,7 @@ void main(int argc, char** argv)
 
 	glutInitWindowPosition(pos_x, pos_y);
 	glutInitWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-	cGame::main_win = glutCreateWindow("The Ballenger Server");
+	cGame::main_win = glutCreateWindow("Dino Run");
 
 
 	//glutFullScreen();
@@ -117,9 +117,10 @@ void main(int argc, char** argv)
 	glutPassiveMotionFunc(AppMouseMotion);
 	glutIdleFunc(AppIdle);
 
-	cGame::sub_win = glutCreateSubWindow(cGame::main_win, 400, 600, 256, 256);
+	cGame::sub_win = glutCreateSubWindow(cGame::main_win, 1146, 540, 200, 200);
+	//glutPositionWindow(1024, 540);
 	glutDisplayFunc(ViewDisplay);
-
+	//glutFullScreen();
 	glutSetWindow(cGame::main_win);
 
 	//GLEW initialization
