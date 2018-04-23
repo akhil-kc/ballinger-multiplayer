@@ -98,7 +98,7 @@
     <ClInclude Include="cTerrain.h" />
     <ClInclude Include="cTexture.h" />
     <ClInclude Include="DataFile.h" />
-    <ClInclude Include="Dino.h" />
+    <ClInclude Include="cDino.h" />
     <ClInclude Include="DisallowCopy.h" />
     <ClInclude Include="Globals.h" />
     <ClInclude Include="cRespawnPoint.h" />
@@ -134,7 +134,7 @@
     <ClCompile Include="cTerrain.cpp" />
     <ClCompile Include="cTexture.cpp" />
     <ClCompile Include="DataFile.cpp" />
-    <ClCompile Include="Dino.cpp" />
+    <ClCompile Include="cDino.cpp" />
     <ClCompile Include="glutil.c" />
     <ClCompile Include="GLUTMain.cpp" />
     <ClCompile Include="cRespawnPoint.cpp" />

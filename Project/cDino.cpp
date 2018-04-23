@@ -1,4 +1,4 @@
-#include "Dino.h"
+#include "cDino.h"
 #include "util.h"
 float fyaw = 0.0, fx = 0.0, fy = 0.0, fz = 0.0;
 Dino::Dino()
@@ -48,15 +48,18 @@ void Dino::draw(cTerrain *Terrain, cCamera *Camera)
 {
 	glPushMatrix();
 	float x = GetX();
-	float y = Terrain->GetHeight(GetX(), GetZ());
+	float y;
+	if (abs(Camera->GetY() - Terrain->GetHeight(GetX(), GetZ())) > 5) {
+		y = Camera->GetY() - 2;
+	} else {
+		y = Terrain->GetHeight(GetX(), GetZ()) + 0.5f;
+	}
 	float z = GetZ();
-
 
 	Camera->GetDirectionVector(fx, fy, fz);
 	glTranslatef(x, y, z);
 	float ang = rad2deg(atan2(-fz, fx));
 	glRotatef(ang, 0.0, 1.0, 0.0);
-
 
 	// Move z-axis to the middle of the dino
 	glTranslatef(0, 0, -1.5);
@@ -69,12 +72,12 @@ void Dino::draw(cTerrain *Terrain, cCamera *Camera)
 													
 	glPushMatrix();
 	glScalef(0.2f, 0.2f, 0.5f);
-	_body.draw();
+	_body.draw(true);
 	glPopMatrix();
 
 	glScalef(0.2f, 0.2f, 0.5f);
 	glTranslatef(0, 0, -0.1);
-	_eyes.draw();
+	_eyes.draw(false);
 	glTranslatef(0, 0, 0.1);
 
 	// Draw one leg	
@@ -85,7 +88,7 @@ void Dino::draw(cTerrain *Terrain, cCamera *Camera)
 	glTranslatef(0, up, 3);
 	if (isMove)
 		rotateAround(10, 5, 0, 0, 0, 1, cosVal * -55);
-	_leg.draw();
+	_leg.draw(true);
 	glPopMatrix();
 
 	// Draw other leg
@@ -96,7 +99,7 @@ void Dino::draw(cTerrain *Terrain, cCamera *Camera)
 	glTranslatef(0, up, -1.5);
 	if (isMove)
 		rotateAround(10, 5, 0, 0, 0, 1, cosVal2 * -55);
-	_leg.draw();
+	_leg.draw(true);
 	glPopMatrix();
 
 	// Draw one arm
@@ -104,7 +107,7 @@ void Dino::draw(cTerrain *Terrain, cCamera *Camera)
 	glTranslatef(0, 0, -0.6);
 	if (isMove)
 		rotateAround(10, 10, 0, 0, 0, 1, cosVal2 * 20);
-	_arm.draw();
+	_arm.draw(true);
 	glPopMatrix();
 
 	// Draw other arm
@@ -112,7 +115,7 @@ void Dino::draw(cTerrain *Terrain, cCamera *Camera)
 	glTranslatef(0, 0, 2.7);
 	if (isMove)
 		rotateAround(10, 10, 0, 0, 0, 1, cosVal2 * -20);
-	_arm.draw();
+	_arm.draw(true);
 	glPopMatrix();
 
 	glPopMatrix();

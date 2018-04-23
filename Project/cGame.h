@@ -6,7 +6,7 @@
 #include "cColumn.h"
 #include "cPortal.h"
 #include "cKey.h"
-#include "Dino.h"
+#include "cDino.h"
 #define SCREEN_WIDTH	1366
 #define SCREEN_HEIGHT	745
 

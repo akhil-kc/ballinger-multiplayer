@@ -58,8 +58,10 @@ void Model::clear(void)
 	_pTexture = NULL;
 }
 
-void Model::draw(void)
+void Model::draw(bool isPlayer2)
 {
+	glPushAttrib(GL_CURRENT_BIT);
+	glPushMatrix();
 	//glScalef(0.5f, 0.5f, 0.5f);
 	// Setup shininess
 	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100);
@@ -79,7 +81,11 @@ void Model::draw(void)
 		GLfloat color[4];
 		p->getColor(color);
 		color[0] /= 1.5; color[1] /= 1.5; color[2] /= 1.5;
-
+		if (isPlayer2) {
+			color[0] = 1.0f;
+			color[1] = 0.0f;
+			color[2] = 0.0f;
+		}
 		glColor4fv(color);
 		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color);
 		p->getColor(color);
@@ -105,11 +111,11 @@ void Model::draw(void)
 		glNormalPointer(GL_FLOAT, 0, p->getNormalPointer());
 		glDrawArrays(p->getPrimitiveType(), 0, p->getVertexCount());
 		glPopMatrix();
-
 		// Update statistics
 		Statistics::instance().modelVerticesRendered += p->getVertexCount();
 	}
-
+	glPopMatrix();
+	glPopAttrib();
 }
 
 void Model::loadSGF(const char *pFilename)

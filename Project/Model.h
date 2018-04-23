@@ -14,7 +14,7 @@ public:
 	Model(void);
 	virtual ~Model(void);
 	// Draw the model
-	void draw(void);
+	void draw(bool isPlayer2);
 
 	// Load a SGF file, can throw an Error class
 	void loadSGF(const char *pFilename);

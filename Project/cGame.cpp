@@ -171,9 +171,10 @@ bool cGame::Init(int lvl)
 	columns.push_back(col);
 
 	//Player initialization
-	Player.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2),TERRAIN_SIZE/2);
+	//Player.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2),TERRAIN_SIZE/2);
+	Player.SetPos(431, Terrain.GetHeight(431,333), 333);
 	if (isMultiplayer)
-		Player2.SetPos(TERRAIN_SIZE / 2, Terrain.GetHeight(TERRAIN_SIZE / 2, TERRAIN_SIZE / 2) + RADIUS, TERRAIN_SIZE / 2);
+		Player2.SetPos(431, Terrain.GetHeight(431, 333), 333);
 
 	prev_pos_x = TERRAIN_SIZE / 2;
 	prev_pos_z = TERRAIN_SIZE / 2;
@@ -182,7 +183,7 @@ bool cGame::Init(int lvl)
 
 	//respawn points initialization
 	cRespawnPoint rp;
-	rp.SetPos(TERRAIN_SIZE/2,Terrain.GetHeight(TERRAIN_SIZE/2,TERRAIN_SIZE/2),TERRAIN_SIZE/2);
+	rp.SetPos(431, Terrain.GetHeight(431, 333), 333);
 	respawn_points.push_back(rp);
 	rp.SetPos(256,Terrain.GetHeight(256,160),160);
 	respawn_points.push_back(rp);
@@ -779,7 +780,6 @@ void cGame::Physics(cBicho &object)
 		player1Pos.y = Player.GetY();
 		player1Pos.z = Player.GetZ();
 		if (checkPlayerCollision(player1Pos, player2Pos)) {
-			//playerPos.x -= 2;
 			Player.SetX(Player.GetX() - 2);
 			Player.SetVX(0);
 			Player.SetVY(0);
@@ -793,7 +793,7 @@ void cGame::Physics(cBicho &object)
 	
 	std::vector<Vector> cnormals = Terrain.GetCollisionNormals(center,RADIUS);
 	
-	object.SetPos(center.x,center.y,center.z); //despues de GetCollisionNormals la posicion center sera una posicion valida sobre la superficie
+	object.SetPos(center.x,center.y,center.z); //after GetCollisionNormals the center position will be a valid position on the surface
 
 	//update angles of rotation by movement
 	if(object.GetZ() != initialPos.z || object.GetX() != initialPos.x)
@@ -882,7 +882,7 @@ void cGame::Physics(cBicho &object)
 		float nextVY = F.y + G.y;
 		float nextVZ = F.z + G.z;
 
-		//limitaremos la velocidad para que la esfera no se salte triangulos
+		//we will limit the speed so that the object does not jump triangles
 		float limitation_factor;
 		if( sqrt(nextVX*nextVX + nextVY*nextVY + nextVZ*nextVZ) <= MAX_MOVEMENT ) limitation_factor = 1.0f;
 		else limitation_factor = sqrt( (MAX_MOVEMENT*MAX_MOVEMENT)/(nextVX*nextVX + nextVY*nextVY + nextVZ*nextVZ) );
@@ -891,9 +891,11 @@ void cGame::Physics(cBicho &object)
 		nextVY *= limitation_factor;
 		nextVZ *= limitation_factor;
 
+		/*akhil
 		//consider the rebound
 		if(N > GRAVITY*4) factor = sqrt( (N*N) / (cNormal.x*cNormal.x + cNormal.y*cNormal.y + cNormal.z*cNormal.z) );
-		else factor = 0.0f;
+		else factor = 0.0f;*/
+		factor = 0.0f;
 
 		nextVX += cNormal.x*factor*ELASTICITY;
 		nextVY += cNormal.y*factor*ELASTICITY;
